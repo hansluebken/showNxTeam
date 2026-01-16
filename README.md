@@ -38,7 +38,7 @@ pip install requests pyyaml python-dotenv
 | `ninox_lexer.py` | Syntax-Highlighting & Code-Formatierung |
 | `ninox_yaml_parser.py` | Parser für ninox-dev-cli YAML-Struktur |
 | `ninox_md_generator.py` | Markdown-Generator für Backups |
-| `show_db.py` | Interaktive Datenbank-Ansicht |
+| `showNxTeam.py` | Interaktive Datenbank-Ansicht |
 
 ## Konfiguration
 
@@ -179,17 +179,14 @@ Die Markdown-Dokumentation enthält:
 
 ## Interaktive Datenbank-Ansicht
 
-Das `show_db.py` Skript bietet eine interaktive Ansicht der extrahierten Daten:
+Das `showNxTeam.py` Skript bietet eine interaktive Ansicht der extrahierten Daten:
 
 ```bash
-# Übersicht
-python3 show_db.py
+# Starten (ausführbar ohne python3)
+./showNxTeam.py
 
-# Paginierte Skript-Ansicht
-python3 show_db.py scripts
-
-# Mit anderer Seitengröße
-python3 show_db.py scripts --size 20
+# Mit eigener Datenbank
+./showNxTeam.py meine_datenbank.db
 ```
 
 Navigation in der Skript-Ansicht:
@@ -276,7 +273,7 @@ python3 ninox_api_extractor.py search "http(" --db ninox.db
 python3 ninox_api_extractor.py md dokumentation.md --db ninox.db
 
 # 5. Interaktiv durchsuchen
-python3 show_db.py scripts
+./showNxTeam.py
 ```
 
 ## Lizenz
