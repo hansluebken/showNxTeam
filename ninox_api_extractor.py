@@ -1072,7 +1072,26 @@ class NinoxSchemaExtractor:
         """
         if not self.conn:
             self.init_database()
-            
+
+        # Integrity-Check: Prüfen ob DB beschädigt ist
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("PRAGMA integrity_check")
+            result = cursor.fetchone()[0]
+            if result != 'ok':
+                logger.warning(f"Datenbank beschädigt: {result}")
+                raise sqlite3.DatabaseError("Database corrupted")
+        except sqlite3.DatabaseError:
+            logger.warning("Beschädigte Datenbank wird gelöscht und neu erstellt...")
+            self.conn.close()
+            self.conn = None
+            # Datei löschen
+            import os
+            if os.path.exists(self.db_path):
+                os.remove(self.db_path)
+            # Neu initialisieren
+            self.init_database()
+
         stats = {
             'databases': 0,
             'tables': 0,
@@ -1080,7 +1099,7 @@ class NinoxSchemaExtractor:
             'relationships': 0,
             'scripts': 0,
         }
-        
+
         # Alte Daten löschen
         cursor = self.conn.cursor()
         cursor.execute("DELETE FROM scripts_fts")

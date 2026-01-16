@@ -445,6 +445,9 @@ class NinoxViewer:
             self.conn.close()
             self.conn = None
             self.cur = None
+            # Kurz warten damit OS die Datei freigibt
+            import time
+            time.sleep(0.2)
 
         clear()
         print(f"""
