@@ -16,23 +16,27 @@ DEFAULT_DB = SCRIPT_DIR / "ninoxstructur.db"
 CONFIG_FILE = SCRIPT_DIR / "config.yaml"
 EXTRACTOR = SCRIPT_DIR / "ninox_api_extractor.py"
 
-# ANSI Codes
+# ANSI Codes - Optimiert für gute Lesbarkeit
 class C:
     RESET = '\033[0m'
     BOLD = '\033[1m'
     DIM = '\033[2m'
     INVERSE = '\033[7m'
+    # Vordergrundfarben
+    BLACK = '\033[30m'
     RED = '\033[91m'
     GREEN = '\033[92m'
     YELLOW = '\033[93m'
-    BLUE = '\033[34m'
+    BLUE = '\033[94m'       # Hell-Blau für Text
     CYAN = '\033[96m'
     WHITE = '\033[97m'
-    BG_BLUE = '\033[44m'
-    BG_CYAN = '\033[46m'
-    BG_WHITE = '\033[47m'
-    BG_BLACK = '\033[40m'
-    BLACK = '\033[30m'
+    # Hintergrundfarben
+    BG_BLUE = '\033[44m'    # Dunkel-Blau Hintergrund
+    BG_GRAY = '\033[100m'   # Grau Hintergrund
+    # Kombinationen für Menüleiste (Weiß auf Blau = klassisch dBASE)
+    MENUBAR = '\033[97m\033[44m'      # Weiß auf Blau
+    MENUKEY = '\033[93m\033[44m'      # Gelb auf Blau (für F-Tasten)
+    STATUSBAR = '\033[97m\033[44m'    # Weiß auf Blau
 
 def clear():
     os.system('cls' if os.name == 'nt' else 'clear')
@@ -108,8 +112,7 @@ class NinoxViewer:
     # ─────────────────────────────────────────────────────────────
 
     def render_menubar(self):
-        """Rendert die horizontale Menüleiste oben"""
-        bar = f"{C.BG_CYAN}{C.BLACK}"
+        """Rendert die horizontale Menüleiste oben (Weiß auf Blau, Tasten in Gelb)"""
         items = [
             ("F1", "Suche"),
             ("F2", "Scripts"),
@@ -119,28 +122,27 @@ class NinoxViewer:
             ("F6", "Config"),
             ("F10", "Ende"),
         ]
+        bar = f"{C.MENUBAR} "
         for key, label in items:
-            bar += f" {C.INVERSE}{key}{C.BG_CYAN}{C.BLACK} {label} │"
-        bar = bar[:-1]  # Letztes │ entfernen
-        bar += " " * (self.width - len(bar) + 50)  # Auffüllen (ANSI codes zählen mit)
-        print(bar + C.RESET)
+            bar += f"{C.MENUKEY}{C.BOLD}{key}{C.MENUBAR} {label}  "
+        # Auffüllen bis Zeilenende
+        print(bar + " " * 50 + C.RESET)
 
     def render_statusbar(self, msg=""):
-        """Rendert die Statusleiste unten"""
+        """Rendert die Statusleiste unten (Weiß auf Blau)"""
         stats = self.get_stats()
         left = f" {stats['databases']} DBs │ {stats['tables']} Tabellen │ {stats['scripts']} Scripts"
         right = msg or self.status_msg or str(self.db_path.name)
         space = self.width - len(left) - len(right) - 2
         if space < 0:
             space = 0
-        bar = f"{C.BG_CYAN}{C.BLACK}{left}{' ' * space}{right} {C.RESET}"
-        print(bar)
+        print(f"{C.STATUSBAR}{left}{' ' * space}{right} {C.RESET}")
 
     def render_title(self, title: str):
-        """Rendert einen Abschnittstitel"""
-        print(f"\n  {C.BOLD}{C.BLUE}┌{'─' * (len(title) + 2)}┐{C.RESET}")
-        print(f"  {C.BOLD}{C.BLUE}│ {C.WHITE}{title}{C.BLUE} │{C.RESET}")
-        print(f"  {C.BOLD}{C.BLUE}└{'─' * (len(title) + 2)}┘{C.RESET}\n")
+        """Rendert einen Abschnittstitel (Cyan Box)"""
+        print(f"\n  {C.CYAN}┌{'─' * (len(title) + 2)}┐{C.RESET}")
+        print(f"  {C.CYAN}│{C.RESET} {C.BOLD}{C.WHITE}{title}{C.RESET} {C.CYAN}│{C.RESET}")
+        print(f"  {C.CYAN}└{'─' * (len(title) + 2)}┘{C.RESET}\n")
 
     def input_field(self, prompt: str, default: str = "") -> str:
         """Eingabefeld mit Prompt"""
@@ -195,18 +197,18 @@ class NinoxViewer:
         stats = self.get_stats()
 
         print(f"""
-  {C.BOLD}╔══════════════════════════════════════════════════════════════╗
-  ║{C.RESET}{C.CYAN}              N I N O X   D A T A B A S E   V I E W E R        {C.RESET}{C.BOLD}║
+  {C.CYAN}╔══════════════════════════════════════════════════════════════╗
+  ║{C.RESET}{C.BOLD}{C.WHITE}              N I N O X   D A T A B A S E   V I E W E R        {C.RESET}{C.CYAN}║
   ╚══════════════════════════════════════════════════════════════╝{C.RESET}
 """)
         if stats['scripts'] > 0:
-            print(f"  {C.DIM}┌─────────────────────────────────────────────────────────┐{C.RESET}")
-            print(f"  {C.DIM}│{C.RESET}  Datenbanken: {C.GREEN}{stats['databases']:>5}{C.RESET}        Scripts:    {C.GREEN}{stats['scripts']:>5}{C.RESET}       {C.DIM}│{C.RESET}")
-            print(f"  {C.DIM}│{C.RESET}  Tabellen:    {C.GREEN}{stats['tables']:>5}{C.RESET}        Abhängigk.: {C.GREEN}{stats['deps']:>5}{C.RESET}       {C.DIM}│{C.RESET}")
-            print(f"  {C.DIM}│{C.RESET}  Felder:      {C.GREEN}{stats['fields']:>5}{C.RESET}                              {C.DIM}│{C.RESET}")
-            print(f"  {C.DIM}└─────────────────────────────────────────────────────────┘{C.RESET}")
+            print(f"  {C.CYAN}┌─────────────────────────────────────────────────────────┐{C.RESET}")
+            print(f"  {C.CYAN}│{C.RESET}  Datenbanken: {C.GREEN}{stats['databases']:>5}{C.RESET}        Scripts:    {C.GREEN}{stats['scripts']:>5}{C.RESET}       {C.CYAN}│{C.RESET}")
+            print(f"  {C.CYAN}│{C.RESET}  Tabellen:    {C.GREEN}{stats['tables']:>5}{C.RESET}        Abhängigk.: {C.GREEN}{stats['deps']:>5}{C.RESET}       {C.CYAN}│{C.RESET}")
+            print(f"  {C.CYAN}│{C.RESET}  Felder:      {C.GREEN}{stats['fields']:>5}{C.RESET}                              {C.CYAN}│{C.RESET}")
+            print(f"  {C.CYAN}└─────────────────────────────────────────────────────────┘{C.RESET}")
         else:
-            print(f"  {C.YELLOW}Keine Daten vorhanden. Drücke F5 für Daten-Import.{C.RESET}")
+            print(f"  {C.YELLOW}Keine Daten vorhanden. Drücke {C.BOLD}F5{C.RESET}{C.YELLOW} für Daten-Import.{C.RESET}")
         print()
 
     # ─────────────────────────────────────────────────────────────
@@ -298,12 +300,12 @@ class NinoxViewer:
                 typ = row['code_type']
                 lines = row['line_count']
 
-                print(f"  {C.BOLD}{C.BLUE}{i:2}{C.RESET}. {C.CYAN}{tbl}{C.RESET} › {elem}")
+                print(f"  {C.YELLOW}{i:2}{C.RESET}. {C.CYAN}{tbl}{C.RESET} › {elem}")
                 print(f"      {C.DIM}{db} | {typ} | {lines} Zeilen{C.RESET}")
 
-            print(f"\n  {C.DIM}─────────────────────────────────────────{C.RESET}")
+            print(f"\n  {C.CYAN}─────────────────────────────────────────{C.RESET}")
             total_pages = (len(results) + per_page - 1) // per_page
-            print(f"  Seite {page+1}/{total_pages}  │  {C.BLUE}N{C.RESET}=Weiter  {C.BLUE}P{C.RESET}=Zurück  {C.BLUE}Nr{C.RESET}=Details  {C.BLUE}Q{C.RESET}=Ende")
+            print(f"  Seite {C.WHITE}{page+1}/{total_pages}{C.RESET}  │  {C.YELLOW}N{C.RESET}=Weiter  {C.YELLOW}P{C.RESET}=Zurück  {C.YELLOW}Nr{C.RESET}=Details  {C.YELLOW}Q{C.RESET}=Ende")
 
             self.render_statusbar(f"{len(results)} Treffer")
 
@@ -364,9 +366,9 @@ class NinoxViewer:
 
         for i, row in enumerate(types, 1):
             bar = '█' * min(row['cnt'] // 20, 25)
-            print(f"  {C.BLUE}{i:2}{C.RESET}. {row['code_type']:<20} {C.GREEN}{row['cnt']:>5}{C.RESET}  {C.DIM}{bar}{C.RESET}")
+            print(f"  {C.YELLOW}{i:2}{C.RESET}. {row['code_type']:<20} {C.GREEN}{row['cnt']:>5}{C.RESET}  {C.DIM}{bar}{C.RESET}")
 
-        print(f"\n  {C.DIM}Nummer eingeben für Details, Q=Zurück{C.RESET}")
+        print(f"\n  {C.DIM}Nummer eingeben für Details, {C.YELLOW}Q{C.RESET}{C.DIM}=Zurück{C.RESET}")
         self.render_statusbar()
 
         choice = self.input_field("").upper()
@@ -445,9 +447,9 @@ class NinoxViewer:
         envs = list(self.environments.keys())
         for i, name in enumerate(envs, 1):
             env = self.environments[name]
-            print(f"  {C.BLUE}{i}{C.RESET}. {C.BOLD}{name}{C.RESET} - {env.get('teamName', '')}")
+            print(f"  {C.YELLOW}{i}{C.RESET}. {C.BOLD}{name}{C.RESET} - {env.get('teamName', '')}")
 
-        print(f"  {C.BLUE}A{C.RESET}. Alle Teams")
+        print(f"  {C.YELLOW}A{C.RESET}. Alle Teams")
         print()
 
         self.render_statusbar()
@@ -513,8 +515,8 @@ class NinoxViewer:
                 print(f"  {C.CYAN}■{C.RESET} {C.BOLD}{name}{C.RESET}: {env.get('domain', '')}")
             print()
 
-        print(f"  {C.BLUE}N{C.RESET} = Neues Environment anlegen")
-        print(f"  {C.BLUE}Q{C.RESET} = Zurück")
+        print(f"  {C.YELLOW}N{C.RESET} = Neues Environment anlegen")
+        print(f"  {C.YELLOW}Q{C.RESET} = Zurück")
         print()
 
         self.render_statusbar()
