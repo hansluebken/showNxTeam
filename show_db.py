@@ -90,9 +90,149 @@ def load_config() -> dict:
         import yaml
         with open(CONFIG_FILE) as f:
             config = yaml.safe_load(f)
+        if config is None:
+            return {}
         return config.get('environments', {})
     except:
         return {}
+
+
+def save_config(environments: dict):
+    """Speichert Environments in config.yaml."""
+    try:
+        import yaml
+        config = {'environments': environments}
+        with open(CONFIG_FILE, 'w') as f:
+            yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        return True
+    except Exception as e:
+        print(f"  {C.RED}Fehler beim Speichern: {e}{C.RESET}")
+        return False
+
+
+def create_config_wizard() -> dict:
+    """Interaktive Eingabemaske zur Konfigurationserstellung."""
+    clear()
+    print(f"""
+{C.BG_MAGENTA}{C.WHITE}{C.BOLD}  KONFIGURATION ERSTELLEN                                                  {C.RESET}
+
+  {C.BOLD}NINOX API ZUGANGSDATEN{C.RESET}
+  ─────────────────────────────────────────────────────
+  Diese Daten findest Du in Ninox unter:
+  {C.CYAN}Einstellungen > Team > API-Key{C.RESET}
+
+  {C.DIM}Die Workspace-ID findest Du in der URL wenn Du
+  im Team-Bereich bist (z.B. https://domain/teams/XXXX){C.RESET}
+""")
+    environments = {}
+
+    while True:
+        print(f"\n  {C.BOLD}NEUES ENVIRONMENT ANLEGEN{C.RESET}")
+        print(f"  {C.DIM}(Leere Eingabe bei Name = Abbrechen){C.RESET}\n")
+
+        # Environment Name
+        env_name = input(f"  {C.YELLOW}Environment-Name{C.RESET} (z.B. production, dev): ").strip()
+        if not env_name:
+            if environments:
+                break
+            print(f"  {C.RED}Mindestens ein Environment wird benötigt!{C.RESET}")
+            continue
+
+        # Domain
+        while True:
+            domain = input(f"  {C.YELLOW}Domain{C.RESET} (z.B. https://firma.ninoxdb.de): ").strip()
+            if domain:
+                if not domain.startswith('http'):
+                    domain = 'https://' + domain
+                break
+            print(f"  {C.RED}Domain ist erforderlich!{C.RESET}")
+
+        # Workspace ID
+        while True:
+            workspace_id = input(f"  {C.YELLOW}Workspace-ID{C.RESET}: ").strip()
+            if workspace_id:
+                break
+            print(f"  {C.RED}Workspace-ID ist erforderlich!{C.RESET}")
+
+        # Team Name (optional)
+        team_name = input(f"  {C.YELLOW}Team-Name{C.RESET} (optional, für Anzeige): ").strip()
+        if not team_name:
+            team_name = env_name.capitalize()
+
+        # API Key
+        while True:
+            api_key = input(f"  {C.YELLOW}API-Key{C.RESET}: ").strip()
+            if api_key:
+                break
+            print(f"  {C.RED}API-Key ist erforderlich!{C.RESET}")
+
+        environments[env_name] = {
+            'domain': domain,
+            'workspaceId': workspace_id,
+            'teamName': team_name,
+            'apiKey': api_key
+        }
+
+        print(f"\n  {C.GREEN}✓{C.RESET} Environment '{C.BOLD}{env_name}{C.RESET}' hinzugefügt")
+
+        # Weitere hinzufügen?
+        more = safe_input(f"\n  Weiteres Environment hinzufügen? ({C.YELLOW}j{C.RESET}/{C.YELLOW}n{C.RESET}): ", ['j', 'n', 'ja', 'nein'])
+        if more not in ['j', 'ja']:
+            break
+
+    return environments
+
+
+def config_menu():
+    """Menü zur Konfigurationsverwaltung."""
+    clear()
+    existing = load_config()
+
+    print(f"""
+{C.BG_MAGENTA}{C.WHITE}{C.BOLD}  KONFIGURATION                                                            {C.RESET}
+""")
+
+    if existing:
+        print(f"  {C.BOLD}VORHANDENE ENVIRONMENTS{C.RESET}")
+        print(f"  ─────────────────────────────────────────────────────")
+        for name, env in existing.items():
+            print(f"  {C.CYAN}■{C.RESET} {C.BOLD}{name}{C.RESET}")
+            print(f"    {C.DIM}Domain: {env.get('domain', '-')}{C.RESET}")
+            print(f"    {C.DIM}Team: {env.get('teamName', '-')}{C.RESET}")
+            print()
+
+        print(f"  {C.YELLOW}a{C.RESET}  Environment hinzufügen")
+        print(f"  {C.YELLOW}n{C.RESET}  Neu erstellen (überschreibt alles)")
+        print(f"  {C.YELLOW}q{C.RESET}  Zurück")
+
+        choice = safe_input(f"\n  {C.BOLD}>{C.RESET} ", ['a', 'n', 'q'])
+
+        if choice == 'a':
+            # Einzelnes Environment hinzufügen
+            new_envs = create_config_wizard()
+            if new_envs:
+                existing.update(new_envs)
+                if save_config(existing):
+                    print(f"\n  {C.GREEN}✓ Konfiguration gespeichert!{C.RESET}")
+                input(f"\n  {C.DIM}[Enter] Weiter{C.RESET}")
+            return existing
+        elif choice == 'n':
+            confirm = safe_input(f"  {C.RED}Wirklich alle Environments löschen?{C.RESET} (j/n): ", ['j', 'n'])
+            if confirm != 'j':
+                return existing
+            existing = {}
+        else:
+            return existing
+
+    # Neu erstellen
+    new_envs = create_config_wizard()
+    if new_envs:
+        if save_config(new_envs):
+            print(f"\n  {C.GREEN}✓ Konfiguration gespeichert in config.yaml!{C.RESET}")
+        input(f"\n  {C.DIM}[Enter] Weiter{C.RESET}")
+        return new_envs
+
+    return existing
 
 
 def parse_search_query(query: str) -> tuple:
@@ -215,14 +355,15 @@ class NinoxViewer:
   ─────────────────────────────────────────────────────""")
         if has_config:
             print(f"  {C.YELLOW}r{C.RESET}  Daten aus Ninox abrufen (Teams auswählen)")
+            print(f"  {C.YELLOW}c{C.RESET}  Konfiguration bearbeiten")
         else:
-            print(f"  {C.DIM}Keine config.yaml gefunden{C.RESET}")
+            print(f"  {C.YELLOW}c{C.RESET}  Konfiguration erstellen")
 
         print(f"""
   {C.YELLOW}q{C.RESET}  Beenden
   ─────────────────────────────────────────────────────
 """)
-        valid = ['q']
+        valid = ['q', 'c']
         if has_data:
             valid.extend(['s', '1', '2', '3', '4', '5', '6'])
         if has_config:
@@ -248,6 +389,8 @@ class NinoxViewer:
             self.show_dependency_matrix()
         elif choice == 'r' and has_config:
             self.extract_menu()
+        elif choice == 'c':
+            self.environments = config_menu()
 
         return None
 
