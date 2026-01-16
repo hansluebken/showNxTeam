@@ -139,22 +139,27 @@ class NinoxViewer:
         print(f"{C.STATUSBAR}{left}{' ' * space}{right} {C.RESET}")
 
     def render_title(self, title: str):
-        """Rendert einen Abschnittstitel (Cyan Box)"""
-        print(f"\n  {C.CYAN}┌{'─' * (len(title) + 2)}┐{C.RESET}")
-        print(f"  {C.CYAN}│{C.RESET} {C.BOLD}{C.WHITE}{title}{C.RESET} {C.CYAN}│{C.RESET}")
-        print(f"  {C.CYAN}└{'─' * (len(title) + 2)}┘{C.RESET}\n")
+        """Rendert einen Abschnittstitel"""
+        print(f"\n   {C.BOLD}{C.WHITE}{title}{C.RESET}")
+        print(f"   {C.CYAN}{'─' * len(title)}{C.RESET}\n")
 
     def input_field(self, prompt: str, default: str = "") -> str:
         """Eingabefeld mit Prompt"""
         try:
-            result = input(f"  {C.CYAN}{prompt}{C.RESET} [{default}]: ").strip()
+            if prompt:
+                if default:
+                    result = input(f"   {C.CYAN}{prompt}{C.RESET} [{default}]: ").strip()
+                else:
+                    result = input(f"   {C.CYAN}{prompt}{C.RESET}: ").strip()
+            else:
+                result = input(f"   {C.CYAN}>{C.RESET} ").strip()
             return result if result else default
         except (KeyboardInterrupt, EOFError):
             return ""
 
     def wait_key(self, msg: str = "Weiter mit beliebiger Taste..."):
         """Wartet auf Tastendruck"""
-        print(f"\n  {C.DIM}{msg}{C.RESET}")
+        print(f"\n   {C.DIM}{msg}{C.RESET}")
         try:
             input()
         except:
@@ -201,18 +206,15 @@ class NinoxViewer:
         stats = self.get_stats()
 
         print(f"""
-  {C.CYAN}╔══════════════════════════════════════════════════════════════╗
-  ║{C.RESET}{C.BOLD}{C.WHITE}              N I N O X   D A T A B A S E   V I E W E R        {C.RESET}{C.CYAN}║
-  ╚══════════════════════════════════════════════════════════════╝{C.RESET}
+   {C.BOLD}{C.WHITE}N I N O X   D A T A B A S E   V I E W E R{C.RESET}
+   {C.CYAN}{'─' * 42}{C.RESET}
 """)
         if stats['scripts'] > 0:
-            print(f"  {C.CYAN}┌─────────────────────────────────────────────────────────┐{C.RESET}")
-            print(f"  {C.CYAN}│{C.RESET}  Datenbanken: {C.GREEN}{stats['databases']:>5}{C.RESET}        Scripts:    {C.GREEN}{stats['scripts']:>5}{C.RESET}       {C.CYAN}│{C.RESET}")
-            print(f"  {C.CYAN}│{C.RESET}  Tabellen:    {C.GREEN}{stats['tables']:>5}{C.RESET}        Abhängigk.: {C.GREEN}{stats['deps']:>5}{C.RESET}       {C.CYAN}│{C.RESET}")
-            print(f"  {C.CYAN}│{C.RESET}  Felder:      {C.GREEN}{stats['fields']:>5}{C.RESET}                              {C.CYAN}│{C.RESET}")
-            print(f"  {C.CYAN}└─────────────────────────────────────────────────────────┘{C.RESET}")
+            print(f"   Datenbanken: {C.GREEN}{stats['databases']:>5}{C.RESET}        Scripts:    {C.GREEN}{stats['scripts']:>5}{C.RESET}")
+            print(f"   Tabellen:    {C.GREEN}{stats['tables']:>5}{C.RESET}        Abhängigk.: {C.GREEN}{stats['deps']:>5}{C.RESET}")
+            print(f"   Felder:      {C.GREEN}{stats['fields']:>5}{C.RESET}")
         else:
-            print(f"  {C.YELLOW}Keine Daten vorhanden. Drücke {C.BOLD}F5{C.RESET}{C.YELLOW} für Daten-Import.{C.RESET}")
+            print(f"   {C.CYAN}Keine Daten vorhanden. Drücke {C.BOLD}R{C.RESET}{C.CYAN} für Daten-Import.{C.RESET}")
         print()
 
     # ─────────────────────────────────────────────────────────────
@@ -225,8 +227,7 @@ class NinoxViewer:
         self.render_menubar()
         self.render_title("SCRIPT-SUCHE")
 
-        print(f"  {C.DIM}Syntax: begriff | a AND b | a OR b{C.RESET}")
-        print()
+        print(f"   {C.DIM}Syntax: begriff | a AND b | a OR b{C.RESET}\n")
 
         query = self.input_field("Suchbegriff")
         if not query:
@@ -282,7 +283,7 @@ class NinoxViewer:
         if not results:
             clear()
             self.render_menubar()
-            print(f"\n  {C.YELLOW}Keine Treffer für: {title}{C.RESET}")
+            print(f"\n   {C.CYAN}Keine Treffer für: {title}{C.RESET}")
             self.wait_key()
             return
 
@@ -304,12 +305,12 @@ class NinoxViewer:
                 typ = row['code_type']
                 lines = row['line_count']
 
-                print(f"  {C.YELLOW}{i:2}{C.RESET}. {C.CYAN}{tbl}{C.RESET} › {elem}")
-                print(f"      {C.DIM}{db} | {typ} | {lines} Zeilen{C.RESET}")
+                print(f"   {C.WHITE}{i:2}{C.RESET}. {C.CYAN}{tbl}{C.RESET} › {elem}")
+                print(f"       {C.DIM}{db} | {typ} | {lines} Zeilen{C.RESET}")
 
-            print(f"\n  {C.CYAN}─────────────────────────────────────────{C.RESET}")
+            print(f"\n   {C.CYAN}{'─' * 40}{C.RESET}")
             total_pages = (len(results) + per_page - 1) // per_page
-            print(f"  Seite {C.WHITE}{page+1}/{total_pages}{C.RESET}  │  {C.YELLOW}N{C.RESET}=Weiter  {C.YELLOW}P{C.RESET}=Zurück  {C.YELLOW}Nr{C.RESET}=Details  {C.YELLOW}Q{C.RESET}=Ende")
+            print(f"   Seite {C.WHITE}{page+1}/{total_pages}{C.RESET}   {C.WHITE}N{C.RESET}=Weiter  {C.WHITE}P{C.RESET}=Zurück  {C.WHITE}Nr{C.RESET}=Details  {C.WHITE}Q{C.RESET}=Ende")
 
             self.render_statusbar(f"{len(results)} Treffer")
 
@@ -335,19 +336,18 @@ class NinoxViewer:
 
         self.render_title(f"{script['table_name']} › {script['element_name']}")
 
-        print(f"  {C.DIM}Datenbank:{C.RESET} {script['database_name']}")
-        print(f"  {C.DIM}Typ:{C.RESET}       {script['code_type']}")
-        print(f"  {C.DIM}Zeilen:{C.RESET}    {script['line_count']}")
-        print()
-        print(f"  {C.DIM}{'─' * 60}{C.RESET}")
+        print(f"   {C.DIM}Datenbank:{C.RESET} {script['database_name']}")
+        print(f"   {C.DIM}Typ:{C.RESET}       {script['code_type']}")
+        print(f"   {C.DIM}Zeilen:{C.RESET}    {script['line_count']}\n")
+        print(f"   {C.CYAN}{'─' * 60}{C.RESET}")
 
         for i, line in enumerate(code.split('\n')[:25], 1):
-            print(f"  {C.DIM}{i:3}│{C.RESET} {line[:75]}")
+            print(f"   {C.DIM}{i:3}{C.RESET} {line[:72]}")
 
         if len(code.split('\n')) > 25:
-            print(f"  {C.DIM}    ... +{len(code.split(chr(10)))-25} weitere Zeilen{C.RESET}")
+            print(f"   {C.DIM}... +{len(code.split(chr(10)))-25} weitere Zeilen{C.RESET}")
 
-        print(f"  {C.DIM}{'─' * 60}{C.RESET}")
+        print(f"   {C.CYAN}{'─' * 60}{C.RESET}")
         self.render_statusbar()
         self.wait_key()
 
@@ -370,9 +370,9 @@ class NinoxViewer:
 
         for i, row in enumerate(types, 1):
             bar = '█' * min(row['cnt'] // 20, 25)
-            print(f"  {C.YELLOW}{i:2}{C.RESET}. {row['code_type']:<20} {C.GREEN}{row['cnt']:>5}{C.RESET}  {C.DIM}{bar}{C.RESET}")
+            print(f"   {C.WHITE}{i:2}{C.RESET}. {row['code_type']:<20} {C.GREEN}{row['cnt']:>5}{C.RESET}  {C.DIM}{bar}{C.RESET}")
 
-        print(f"\n  {C.DIM}Nummer eingeben für Details, {C.YELLOW}Q{C.RESET}{C.DIM}=Zurück{C.RESET}")
+        print(f"\n   {C.DIM}Nummer eingeben für Details, {C.WHITE}Q{C.RESET}{C.DIM}=Zurück{C.RESET}")
         self.render_statusbar()
 
         choice = self.input_field("").upper()
@@ -400,8 +400,8 @@ class NinoxViewer:
         self.cur.execute("SELECT id, name, table_count, code_count FROM databases ORDER BY name")
 
         for row in self.cur.fetchall():
-            print(f"  {C.CYAN}■{C.RESET} {C.BOLD}{row['name']}{C.RESET}")
-            print(f"    {C.DIM}Tabellen: {row['table_count']}  Scripts: {row['code_count']}{C.RESET}")
+            print(f"   {C.CYAN}■{C.RESET} {C.BOLD}{row['name']}{C.RESET}")
+            print(f"     {C.DIM}Tabellen: {row['table_count']}  Scripts: {row['code_count']}{C.RESET}\n")
 
         self.render_statusbar()
         self.wait_key()
@@ -427,9 +427,9 @@ class NinoxViewer:
         for row in self.cur.fetchall():
             if current_db != row['db_name']:
                 current_db = row['db_name']
-                print(f"\n  {C.CYAN}{C.BOLD}[{current_db}]{C.RESET}")
+                print(f"\n   {C.CYAN}{C.BOLD}{current_db}{C.RESET}")
             caption = f" ({row['caption']})" if row['caption'] and row['caption'] != row['name'] else ""
-            print(f"    ├─ {row['name']}{C.DIM}{caption} [{row['field_count']} Felder]{C.RESET}")
+            print(f"     {row['name']}{C.DIM}{caption} [{row['field_count']} Felder]{C.RESET}")
 
         self.render_statusbar()
         self.wait_key()
@@ -441,7 +441,7 @@ class NinoxViewer:
     def extract_dialog(self):
         """Dialog für Datenextraktion"""
         if not self.environments:
-            self.status_msg = "Keine Config - F6 drücken"
+            self.status_msg = "Keine Config - C drücken"
             return
 
         clear()
@@ -451,10 +451,9 @@ class NinoxViewer:
         envs = list(self.environments.keys())
         for i, name in enumerate(envs, 1):
             env = self.environments[name]
-            print(f"  {C.YELLOW}{i}{C.RESET}. {C.BOLD}{name}{C.RESET} - {env.get('teamName', '')}")
+            print(f"   {C.WHITE}{i}{C.RESET}. {C.BOLD}{name}{C.RESET} - {env.get('teamName', '')}")
 
-        print(f"  {C.YELLOW}A{C.RESET}. Alle Teams")
-        print()
+        print(f"   {C.WHITE}A{C.RESET}. Alle Teams\n")
 
         self.render_statusbar()
         choice = self.input_field("Team auswählen").upper()
@@ -479,7 +478,7 @@ class NinoxViewer:
         self.render_title("EXTRAKTION")
 
         for env_name in env_names:
-            print(f"  {C.YELLOW}►{C.RESET} Extrahiere {C.BOLD}{env_name}{C.RESET}...")
+            print(f"   {C.CYAN}►{C.RESET} Extrahiere {C.BOLD}{env_name}{C.RESET}...")
 
             cmd = [sys.executable, str(EXTRACTOR), 'extract',
                    '--config', str(CONFIG_FILE), '--env', env_name,
@@ -488,16 +487,16 @@ class NinoxViewer:
             try:
                 result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(SCRIPT_DIR))
                 if result.returncode == 0:
-                    print(f"  {C.GREEN}✓{C.RESET} Erfolgreich")
+                    print(f"   {C.GREEN}✓{C.RESET} Erfolgreich")
                     for line in result.stdout.split('\n'):
                         if 'databases:' in line or 'scripts:' in line:
-                            print(f"    {C.DIM}{line.strip()}{C.RESET}")
+                            print(f"     {C.DIM}{line.strip()}{C.RESET}")
                 else:
-                    print(f"  {C.RED}✗{C.RESET} Fehler")
+                    print(f"   {C.RED}✗{C.RESET} Fehler")
                     for line in (result.stderr or result.stdout).strip().split('\n')[-5:]:
-                        print(f"    {C.RED}{line}{C.RESET}")
+                        print(f"     {C.RED}{line}{C.RESET}")
             except Exception as e:
-                print(f"  {C.RED}✗{C.RESET} {e}")
+                print(f"   {C.RED}✗{C.RESET} {e}")
 
         self._reconnect()
         self.render_statusbar("Extraktion abgeschlossen")
@@ -514,14 +513,13 @@ class NinoxViewer:
         self.render_title("KONFIGURATION")
 
         if self.environments:
-            print(f"  {C.DIM}Vorhandene Environments:{C.RESET}")
+            print(f"   {C.DIM}Vorhandene Environments:{C.RESET}\n")
             for name, env in self.environments.items():
-                print(f"  {C.CYAN}■{C.RESET} {C.BOLD}{name}{C.RESET}: {env.get('domain', '')}")
+                print(f"   {C.CYAN}■{C.RESET} {C.BOLD}{name}{C.RESET}: {env.get('domain', '')}")
             print()
 
-        print(f"  {C.YELLOW}N{C.RESET} = Neues Environment anlegen")
-        print(f"  {C.YELLOW}Q{C.RESET} = Zurück")
-        print()
+        print(f"   {C.WHITE}N{C.RESET} = Neues Environment anlegen")
+        print(f"   {C.WHITE}Q{C.RESET} = Zurück\n")
 
         self.render_statusbar()
         choice = self.input_field("").upper()
@@ -535,7 +533,7 @@ class NinoxViewer:
         self.render_menubar()
         self.render_title("NEUES ENVIRONMENT")
 
-        print(f"  {C.DIM}Ninox Zugangsdaten eingeben:{C.RESET}\n")
+        print(f"   {C.DIM}Ninox Zugangsdaten eingeben:{C.RESET}\n")
 
         name = self.input_field("Name (z.B. production)")
         if not name:
@@ -563,9 +561,9 @@ class NinoxViewer:
         }
 
         if save_config(self.environments):
-            print(f"\n  {C.GREEN}✓ Gespeichert!{C.RESET}")
+            print(f"\n   {C.GREEN}✓ Gespeichert!{C.RESET}")
         else:
-            print(f"\n  {C.RED}✗ Fehler beim Speichern{C.RESET}")
+            print(f"\n   {C.RED}✗ Fehler beim Speichern{C.RESET}")
 
         self.wait_key()
 
