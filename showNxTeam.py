@@ -437,6 +437,12 @@ class NinoxViewer:
 
     def run_extraction(self, env_names: list):
         """Führt Extraktion für ausgewählte Environments aus."""
+        # Datenbankverbindung schließen vor Extraktion
+        if self.conn:
+            self.conn.close()
+            self.conn = None
+            self.cur = None
+
         clear()
         print(f"""
 {C.BG_MAGENTA}{C.WHITE}{C.BOLD}  EXTRAKTION LÄUFT...                                                      {C.RESET}
@@ -469,8 +475,11 @@ class NinoxViewer:
                             print(f"    {C.DIM}{line.strip()}{C.RESET}")
                 else:
                     print(f"  {C.RED}✗{C.RESET} {env_name} fehlgeschlagen")
-                    if result.stderr:
-                        print(f"    {C.RED}{result.stderr[:200]}{C.RESET}")
+                    # Zeige Fehler aus stderr oder stdout
+                    error_output = result.stderr or result.stdout
+                    if error_output:
+                        for line in error_output.strip().split('\n')[-10:]:
+                            print(f"    {C.RED}{line}{C.RESET}")
 
             except Exception as e:
                 print(f"  {C.RED}✗{C.RESET} Fehler: {e}")
