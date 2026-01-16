@@ -1,0 +1,61 @@
+# =============================================================================
+# Ninox API Extractor - Konfigurationsdatei
+# =============================================================================
+#
+# Kopiere diese Datei nach config.yaml und passe die Werte an.
+#
+# Verwendung:
+#   python3 ninox_api_extractor.py extract --config config.yaml --env production
+#   python3 ninox_api_extractor.py extract --config config.yaml --env development
+#
+# =============================================================================
+
+# Mehrere Umgebungen können definiert werden
+environments:
+
+  # Produktionsumgebung
+  production:
+    # Ninox Server URL (ohne trailing slash)
+    domain: https://app.ninox.com
+
+    # Team/Workspace ID
+    # Findest du in der URL: https://app.ninox.com/teams/DIESE_ID/...
+    workspaceId: abc123xyz
+
+    # API Key
+    # Erstellen unter: Einstellungen > Integrationen > API Key generieren
+    apiKey: your-production-api-key-here
+
+  # Entwicklungsumgebung
+  development:
+    domain: https://app.ninox.com
+    workspaceId: dev456xyz
+    apiKey: your-development-api-key-here
+
+  # Eigene Ninox-Instanz (Self-Hosted)
+  # selfhosted:
+  #   domain: https://ninox.meine-firma.de
+  #   workspaceId: team123
+  #   apiKey: selfhosted-api-key
+
+# =============================================================================
+# Hinweise:
+# =============================================================================
+#
+# 1. API Key erstellen:
+#    - Ninox öffnen > Einstellungen (Zahnrad) > Integrationen > API
+#    - "Neuen API-Schlüssel erstellen"
+#    - Den Key sicher speichern (wird nur einmal angezeigt!)
+#
+# 2. Team/Workspace ID finden:
+#    - In Ninox einloggen
+#    - Die ID steht in der URL nach /teams/
+#    - Beispiel: https://app.ninox.com/teams/abc123xyz/databases
+#                                        ^^^^^^^^^ = workspaceId
+#
+# 3. Sicherheit:
+#    - Diese Datei NICHT in Git committen!
+#    - In .gitignore eintragen: config.yaml
+#    - Nur config.example.yaml committen
+#
+# =============================================================================

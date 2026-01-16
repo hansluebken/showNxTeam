@@ -1,0 +1,29 @@
+# Konfiguration mit sensiblen Daten
+.env
+config.yaml
+
+# Claude Code Projektdatei
+CLAUDE.md
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+ENV/
+
+# SQLite Datenbanken
+*.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
