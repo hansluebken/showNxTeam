@@ -24,12 +24,15 @@ class C:
     GREEN = '\033[92m'
     YELLOW = '\033[93m'
     BLUE = '\033[94m'
+    DARKBLUE = '\033[34m'
     MAGENTA = '\033[95m'
     CYAN = '\033[96m'
     WHITE = '\033[97m'
     BG_BLUE = '\033[44m'
     BG_GREEN = '\033[42m'
     BG_MAGENTA = '\033[45m'
+    # Menü-Optionen Farbe
+    KEY = '\033[34m\033[1m'  # Dunkelblau + Bold
 
 # Code-Typ Namen
 CODE_TYPE_NAMES = {
@@ -176,7 +179,7 @@ def create_config_wizard() -> dict:
         print(f"\n  {C.GREEN}✓{C.RESET} Environment '{C.BOLD}{env_name}{C.RESET}' hinzugefügt")
 
         # Weitere hinzufügen?
-        more = safe_input(f"\n  Weiteres Environment hinzufügen? ({C.YELLOW}j{C.RESET}/{C.YELLOW}n{C.RESET}): ", ['j', 'n', 'ja', 'nein'])
+        more = safe_input(f"\n  Weiteres Environment hinzufügen? ({C.KEY}j{C.RESET}/{C.KEY}n{C.RESET}): ", ['j', 'n', 'ja', 'nein'])
         if more not in ['j', 'ja']:
             break
 
@@ -201,9 +204,9 @@ def config_menu():
             print(f"    {C.DIM}Team: {env.get('teamName', '-')}{C.RESET}")
             print()
 
-        print(f"  {C.YELLOW}a{C.RESET}  Environment hinzufügen")
-        print(f"  {C.YELLOW}n{C.RESET}  Neu erstellen (überschreibt alles)")
-        print(f"  {C.YELLOW}q{C.RESET}  Zurück")
+        print(f"  {C.KEY}a{C.RESET}  Environment hinzufügen")
+        print(f"  {C.KEY}n{C.RESET}  Neu erstellen (überschreibt alles)")
+        print(f"  {C.KEY}q{C.RESET}  Zurück")
 
         choice = safe_input(f"\n  {C.BOLD}>{C.RESET} ", ['a', 'n', 'q'])
 
@@ -343,10 +346,10 @@ class NinoxViewer:
         print(f"""  {C.BOLD}SUCHE & ANZEIGE{C.RESET}
   ─────────────────────────────────────────────────────""")
         if has_data:
-            print(f"""  {C.YELLOW}s{C.RESET}  Suche (AND/OR)    {C.YELLOW}4{C.RESET}  Tabellen
-  {C.YELLOW}1{C.RESET}  Scripts nach Typ   {C.YELLOW}5{C.RESET}  Abhängigkeiten
-  {C.YELLOW}2{C.RESET}  Alle Scripts       {C.YELLOW}6{C.RESET}  Dependency-Matrix
-  {C.YELLOW}3{C.RESET}  Datenbanken""")
+            print(f"""  {C.KEY}s{C.RESET}  Suche (AND/OR)    {C.KEY}4{C.RESET}  Tabellen
+  {C.KEY}1{C.RESET}  Scripts nach Typ   {C.KEY}5{C.RESET}  Abhängigkeiten
+  {C.KEY}2{C.RESET}  Alle Scripts       {C.KEY}6{C.RESET}  Dependency-Matrix
+  {C.KEY}3{C.RESET}  Datenbanken""")
         else:
             print(f"  {C.DIM}Keine Daten vorhanden. Bitte zuerst Daten abrufen.{C.RESET}")
 
@@ -354,13 +357,13 @@ class NinoxViewer:
   {C.BOLD}DATEN ABRUFEN{C.RESET}
   ─────────────────────────────────────────────────────""")
         if has_config:
-            print(f"  {C.YELLOW}r{C.RESET}  Daten aus Ninox abrufen (Teams auswählen)")
-            print(f"  {C.YELLOW}c{C.RESET}  Konfiguration bearbeiten")
+            print(f"  {C.KEY}r{C.RESET}  Daten aus Ninox abrufen (Teams auswählen)")
+            print(f"  {C.KEY}c{C.RESET}  Konfiguration bearbeiten")
         else:
-            print(f"  {C.YELLOW}c{C.RESET}  Konfiguration erstellen")
+            print(f"  {C.KEY}c{C.RESET}  Konfiguration erstellen")
 
         print(f"""
-  {C.YELLOW}q{C.RESET}  Beenden
+  {C.KEY}q{C.RESET}  Beenden
   ─────────────────────────────────────────────────────
 """)
         valid = ['q', 'c']
@@ -409,13 +412,13 @@ class NinoxViewer:
             env = self.environments[env_name]
             team_name = env.get('teamName', env.get('workspaceId', 'Unbekannt'))
             domain = env.get('domain', '')
-            print(f"  {C.YELLOW}{i}{C.RESET}  {C.BOLD}{env_name}{C.RESET}")
+            print(f"  {C.KEY}{i}{C.RESET}  {C.BOLD}{env_name}{C.RESET}")
             print(f"     {C.CYAN}{team_name}{C.RESET}")
             print(f"     {C.DIM}{domain}{C.RESET}")
             print()
 
-        print(f"  {C.YELLOW}a{C.RESET}  Alle Teams abrufen")
-        print(f"  {C.YELLOW}q{C.RESET}  Zurück")
+        print(f"  {C.KEY}a{C.RESET}  Alle Teams abrufen")
+        print(f"  {C.KEY}q{C.RESET}  Zurück")
         print()
 
         valid = ['q', 'a'] + [str(i) for i in range(1, len(envs) + 1)]
@@ -631,7 +634,7 @@ class NinoxViewer:
                 if len(code.split('\n')) > 4:
                     preview += f"\n      {C.DIM}│ ... +{len(code.split(chr(10)))-4} Zeilen{C.RESET}"
 
-                print(f"  {C.YELLOW}{C.BOLD}[{i}]{C.RESET} {C.CYAN}{tbl}{C.RESET} › {elem}")
+                print(f"  {C.KEY}[{i}]{C.RESET} {C.CYAN}{tbl}{C.RESET} › {elem}")
                 print(f"      {C.DIM}{db} | {typ} | {row['line_count']} Zeilen{C.RESET}")
                 print(preview)
                 print()
@@ -640,12 +643,12 @@ class NinoxViewer:
             print(f"  {C.DIM}────────────────────────────────────────────────────{C.RESET}")
             nav = [f"Seite {C.BOLD}{page+1}/{total_pages}{C.RESET}"]
             if page > 0:
-                nav.append(f"{C.YELLOW}p{C.RESET}=Zurück")
+                nav.append(f"{C.KEY}p{C.RESET}=Zurück")
             if page < total_pages - 1:
-                nav.append(f"{C.YELLOW}n{C.RESET}=Weiter")
-            nav.append(f"{C.YELLOW}Nr{C.RESET}=Details")
-            nav.append(f"{C.YELLOW}s{C.RESET}=Suche")
-            nav.append(f"{C.YELLOW}q{C.RESET}=Menü")
+                nav.append(f"{C.KEY}n{C.RESET}=Weiter")
+            nav.append(f"{C.KEY}Nr{C.RESET}=Details")
+            nav.append(f"{C.KEY}s{C.RESET}=Suche")
+            nav.append(f"{C.KEY}q{C.RESET}=Menü")
             print(f"  {' | '.join(nav)}")
 
             valid = ['q', 's', 'n', 'p'] + [str(i) for i in range(1, len(results)+1)]
@@ -704,7 +707,7 @@ class NinoxViewer:
             name = get_type_name(row['code_type'])
             cnt = row['cnt']
             bar = '█' * min(cnt // 10, 30)
-            print(f"  {C.YELLOW}{i:2}{C.RESET}  {name:<25} {C.GREEN}{cnt:>5}{C.RESET}  {C.DIM}{bar}{C.RESET}")
+            print(f"  {C.KEY}{i:2}{C.RESET}  {name:<25} {C.GREEN}{cnt:>5}{C.RESET}  {C.DIM}{bar}{C.RESET}")
 
         print(f"\n  {C.DIM}Nummer eingeben oder [q] für Zurück{C.RESET}")
 
