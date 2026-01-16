@@ -114,13 +114,13 @@ class NinoxViewer:
     def render_menubar(self):
         """Rendert die horizontale Menüleiste oben (Weiß auf Blau, Tasten in Gelb)"""
         items = [
-            ("F1", "Suche"),
-            ("F2", "Scripts"),
-            ("F3", "Datenbanken"),
-            ("F4", "Tabellen"),
-            ("F5", "Refresh"),
-            ("F6", "Config"),
-            ("F10", "Ende"),
+            ("S", "Suche"),
+            ("T", "Scripts"),
+            ("D", "Datenbanken"),
+            ("A", "Tabellen"),
+            ("R", "Refresh"),
+            ("C", "Config"),
+            ("Q", "Ende"),
         ]
         bar = f"{C.MENUBAR} "
         for key, label in items:
@@ -173,23 +173,27 @@ class NinoxViewer:
             self.show_main_content()
             self.render_statusbar()
 
-            choice = self.input_field("Auswahl (F1-F10)").upper()
+            choice = self.input_field("").upper().strip()
 
-            if choice in ['F10', 'Q', 'X', 'ESC', '']:
-                if choice == '':
-                    continue
+            # Escape-Sequenzen ignorieren
+            if choice.startswith('^[') or choice.startswith('\x1b'):
+                continue
+
+            if choice in ['Q', 'X', '0']:
                 break
-            elif choice in ['F1', '1', 'S']:
+            elif choice == '':
+                continue
+            elif choice in ['S', '1']:
                 self.search_dialog()
-            elif choice in ['F2', '2']:
+            elif choice in ['T', '2']:
                 self.show_scripts()
-            elif choice in ['F3', '3', 'D']:
+            elif choice in ['D', '3']:
                 self.show_databases()
-            elif choice in ['F4', '4', 'T']:
+            elif choice in ['A', '4']:
                 self.show_tables()
-            elif choice in ['F5', '5', 'R']:
+            elif choice in ['R', '5']:
                 self.extract_dialog()
-            elif choice in ['F6', '6', 'C']:
+            elif choice in ['C', '6']:
                 self.config_dialog()
 
     def show_main_content(self):
