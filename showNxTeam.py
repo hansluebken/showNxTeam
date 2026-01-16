@@ -1,14 +1,22 @@
 #!/usr/bin/env python3
 """
-Ninox Database Viewer - dBASE-Style Menüführung
+Ninox Database Viewer - Textual TUI
 """
 
 import sqlite3
 import sys
-import os
 import subprocess
-import time
 from pathlib import Path
+
+from textual.app import App, ComposeResult
+from textual.binding import Binding
+from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
+from textual.widgets import (
+    Header, Footer, Static, Button, Input, DataTable,
+    Label, ListView, ListItem, TextArea, TabbedContent, TabPane
+)
+from textual.screen import Screen, ModalScreen
+from textual import events
 
 # Pfade
 SCRIPT_DIR = Path(__file__).parent
@@ -16,36 +24,6 @@ DEFAULT_DB = SCRIPT_DIR / "ninoxstructur.db"
 CONFIG_FILE = SCRIPT_DIR / "config.yaml"
 EXTRACTOR = SCRIPT_DIR / "ninox_api_extractor.py"
 
-# ANSI Codes - Optimiert für gute Lesbarkeit
-class C:
-    RESET = '\033[0m'
-    BOLD = '\033[1m'
-    DIM = '\033[2m'
-    INVERSE = '\033[7m'
-    # Vordergrundfarben
-    BLACK = '\033[30m'
-    RED = '\033[91m'
-    GREEN = '\033[92m'
-    YELLOW = '\033[93m'
-    BLUE = '\033[94m'       # Hell-Blau für Text
-    CYAN = '\033[96m'
-    WHITE = '\033[97m'
-    # Hintergrundfarben
-    BG_BLUE = '\033[44m'    # Dunkel-Blau Hintergrund
-    BG_GRAY = '\033[100m'   # Grau Hintergrund
-    # Kombinationen für Menüleiste (Weiß auf Blau = klassisch dBASE)
-    MENUBAR = '\033[97m\033[44m'      # Weiß auf Blau
-    MENUKEY = '\033[93m\033[44m'      # Gelb auf Blau (für F-Tasten)
-    STATUSBAR = '\033[97m\033[44m'    # Weiß auf Blau
-
-def clear():
-    os.system('cls' if os.name == 'nt' else 'clear')
-
-def get_terminal_width():
-    try:
-        return os.get_terminal_size().columns
-    except:
-        return 80
 
 def load_config() -> dict:
     if not CONFIG_FILE.exists():
@@ -58,7 +36,8 @@ def load_config() -> dict:
     except:
         return {}
 
-def save_config(environments: dict):
+
+def save_config(environments: dict) -> bool:
     try:
         import yaml
         with open(CONFIG_FILE, 'w') as f:
@@ -68,23 +47,20 @@ def save_config(environments: dict):
         return False
 
 
-class NinoxViewer:
+class Database:
+    """SQLite Datenbank-Wrapper"""
+
     def __init__(self, db_path: Path):
         self.db_path = db_path
         self.conn = None
-        self.cur = None
-        self.environments = load_config()
-        self.status_msg = ""
-        self.width = get_terminal_width()
         self._connect()
 
     def _connect(self):
         if self.db_path.exists():
             self.conn = sqlite3.connect(self.db_path)
             self.conn.row_factory = sqlite3.Row
-            self.cur = self.conn.cursor()
 
-    def _reconnect(self):
+    def reconnect(self):
         if self.conn:
             self.conn.close()
         self._connect()
@@ -95,154 +71,35 @@ class NinoxViewer:
 
     def get_stats(self) -> dict:
         stats = {'databases': 0, 'tables': 0, 'fields': 0, 'scripts': 0, 'deps': 0}
-        if not self.cur:
+        if not self.conn:
             return stats
+        cur = self.conn.cursor()
         for key, table in [('databases', 'databases'), ('tables', 'tables'),
                            ('fields', 'fields'), ('scripts', 'scripts'),
                            ('deps', 'script_dependencies')]:
             try:
-                self.cur.execute(f"SELECT COUNT(*) FROM {table}")
-                stats[key] = self.cur.fetchone()[0]
+                cur.execute(f"SELECT COUNT(*) FROM {table}")
+                stats[key] = cur.fetchone()[0]
             except:
                 pass
         return stats
 
-    # ─────────────────────────────────────────────────────────────
-    # RENDERING
-    # ─────────────────────────────────────────────────────────────
-
-    def render_menubar(self):
-        """Rendert die horizontale Menüleiste oben (Weiß auf Blau, Tasten in Gelb)"""
-        items = [
-            ("S", "Suche"),
-            ("T", "Scripts"),
-            ("D", "Datenbanken"),
-            ("A", "Tabellen"),
-            ("R", "Refresh"),
-            ("C", "Config"),
-            ("Q", "Ende"),
-        ]
-        bar = f"{C.MENUBAR} "
-        for key, label in items:
-            bar += f"{C.MENUKEY}{C.BOLD}{key}{C.MENUBAR} {label}  "
-        # Auffüllen bis Zeilenende
-        print(bar + " " * 50 + C.RESET)
-
-    def render_statusbar(self, msg=""):
-        """Rendert die Statusleiste unten (Weiß auf Blau)"""
-        stats = self.get_stats()
-        left = f" {stats['databases']} DBs │ {stats['tables']} Tabellen │ {stats['scripts']} Scripts"
-        right = msg or self.status_msg or str(self.db_path.name)
-        space = self.width - len(left) - len(right) - 2
-        if space < 0:
-            space = 0
-        print(f"{C.STATUSBAR}{left}{' ' * space}{right} {C.RESET}")
-
-    def render_title(self, title: str):
-        """Rendert einen Abschnittstitel"""
-        print(f"\n   {C.BOLD}{C.WHITE}{title}{C.RESET}")
-        print(f"   {C.CYAN}{'─' * len(title)}{C.RESET}\n")
-
-    def input_field(self, prompt: str, default: str = "") -> str:
-        """Eingabefeld mit Prompt"""
-        try:
-            if prompt:
-                if default:
-                    result = input(f"   {C.CYAN}{prompt}{C.RESET} [{default}]: ").strip()
-                else:
-                    result = input(f"   {C.CYAN}{prompt}{C.RESET}: ").strip()
-            else:
-                result = input(f"   {C.CYAN}>{C.RESET} ").strip()
-            return result if result else default
-        except (KeyboardInterrupt, EOFError):
-            return ""
-
-    def wait_key(self, msg: str = "Weiter mit beliebiger Taste..."):
-        """Wartet auf Tastendruck"""
-        print(f"\n   {C.DIM}{msg}{C.RESET}")
-        try:
-            input()
-        except:
-            pass
-
-    # ─────────────────────────────────────────────────────────────
-    # HAUPTMENÜ
-    # ─────────────────────────────────────────────────────────────
-
-    def run(self):
-        """Hauptschleife"""
-        while True:
-            clear()
-            self.width = get_terminal_width()
-            self.render_menubar()
-            self.show_main_content()
-            self.render_statusbar()
-
-            choice = self.input_field("").upper().strip()
-
-            # Escape-Sequenzen ignorieren
-            if choice.startswith('^[') or choice.startswith('\x1b'):
-                continue
-
-            if choice in ['Q', 'X', '0']:
-                break
-            elif choice == '':
-                continue
-            elif choice in ['S', '1']:
-                self.search_dialog()
-            elif choice in ['T', '2']:
-                self.show_scripts()
-            elif choice in ['D', '3']:
-                self.show_databases()
-            elif choice in ['A', '4']:
-                self.show_tables()
-            elif choice in ['R', '5']:
-                self.extract_dialog()
-            elif choice in ['C', '6']:
-                self.config_dialog()
-
-    def show_main_content(self):
-        """Zeigt Hauptinhalt"""
-        stats = self.get_stats()
-
-        print(f"""
-   {C.BOLD}{C.WHITE}N I N O X   D A T A B A S E   V I E W E R{C.RESET}
-   {C.CYAN}{'─' * 42}{C.RESET}
-""")
-        if stats['scripts'] > 0:
-            print(f"   Datenbanken: {C.GREEN}{stats['databases']:>5}{C.RESET}        Scripts:    {C.GREEN}{stats['scripts']:>5}{C.RESET}")
-            print(f"   Tabellen:    {C.GREEN}{stats['tables']:>5}{C.RESET}        Abhängigk.: {C.GREEN}{stats['deps']:>5}{C.RESET}")
-            print(f"   Felder:      {C.GREEN}{stats['fields']:>5}{C.RESET}")
-        else:
-            print(f"   {C.CYAN}Keine Daten vorhanden. Drücke {C.BOLD}R{C.RESET}{C.CYAN} für Daten-Import.{C.RESET}")
-        print()
-
-    # ─────────────────────────────────────────────────────────────
-    # F1 - SUCHE
-    # ─────────────────────────────────────────────────────────────
-
-    def search_dialog(self):
-        """Suchdialog"""
-        clear()
-        self.render_menubar()
-        self.render_title("SCRIPT-SUCHE")
-
-        print(f"   {C.DIM}Syntax: begriff | a AND b | a OR b{C.RESET}\n")
-
-        query = self.input_field("Suchbegriff")
-        if not query:
-            return
-
-        self.execute_search(query)
-
-    def execute_search(self, query: str):
-        """Führt Suche aus"""
-        if not self.cur:
-            self.status_msg = "Keine Datenbank"
-            return
+    def search_scripts(self, query: str, limit: int = 100) -> list:
+        if not self.conn:
+            return []
+        cur = self.conn.cursor()
 
         # AND/OR parsen
-        terms, operator = self.parse_query(query)
+        import re
+        upper = query.upper()
+        if ' AND ' in upper:
+            parts = re.split(r'\s+AND\s+', query, flags=re.IGNORECASE)
+            terms, operator = [p.strip() for p in parts], 'AND'
+        elif ' OR ' in upper:
+            parts = re.split(r'\s+OR\s+', query, flags=re.IGNORECASE)
+            terms, operator = [p.strip() for p in parts], 'OR'
+        else:
+            terms, operator = [query.strip()], 'AND'
 
         sql = """SELECT id, database_name, table_name, element_name,
                         code_type, code, line_count FROM scripts WHERE 1=1"""
@@ -259,226 +116,178 @@ class NinoxViewer:
                 params.extend([f'%{term}%'] * 3)
             sql += f" AND ({' OR '.join(conditions)})"
 
-        sql += " ORDER BY database_name, table_name LIMIT 50"
+        sql += f" ORDER BY database_name, table_name LIMIT {limit}"
+        cur.execute(sql, params)
+        return [dict(row) for row in cur.fetchall()]
 
-        self.cur.execute(sql, params)
-        results = list(self.cur.fetchall())
+    def get_script_types(self) -> list:
+        if not self.conn:
+            return []
+        cur = self.conn.cursor()
+        cur.execute("""SELECT code_type, COUNT(*) as cnt
+                       FROM scripts GROUP BY code_type ORDER BY cnt DESC""")
+        return [dict(row) for row in cur.fetchall()]
 
-        self.show_results(results, f"Suche: {query}")
+    def get_scripts_by_type(self, code_type: str, limit: int = 100) -> list:
+        if not self.conn:
+            return []
+        cur = self.conn.cursor()
+        cur.execute("""SELECT id, database_name, table_name, element_name,
+                       code_type, code, line_count FROM scripts
+                       WHERE code_type = ? LIMIT ?""", (code_type, limit))
+        return [dict(row) for row in cur.fetchall()]
 
-    def parse_query(self, query: str):
-        """Parst AND/OR Query"""
-        import re
-        upper = query.upper()
-        if ' AND ' in upper:
-            parts = re.split(r'\s+AND\s+', query, flags=re.IGNORECASE)
-            return [p.strip() for p in parts], 'AND'
-        elif ' OR ' in upper:
-            parts = re.split(r'\s+OR\s+', query, flags=re.IGNORECASE)
-            return [p.strip() for p in parts], 'OR'
-        return [query.strip()], 'AND'
+    def get_databases(self) -> list:
+        if not self.conn:
+            return []
+        cur = self.conn.cursor()
+        cur.execute("SELECT id, name, table_count, code_count FROM databases ORDER BY name")
+        return [dict(row) for row in cur.fetchall()]
 
-    def show_results(self, results: list, title: str):
-        """Zeigt Suchergebnisse"""
-        if not results:
-            clear()
-            self.render_menubar()
-            print(f"\n   {C.CYAN}Keine Treffer für: {title}{C.RESET}")
-            self.wait_key()
-            return
+    def get_tables(self, limit: int = 100) -> list:
+        if not self.conn:
+            return []
+        cur = self.conn.cursor()
+        cur.execute("""SELECT t.name, t.caption, t.field_count, d.name as db_name
+                       FROM tables t JOIN databases d ON t.database_id = d.id
+                       ORDER BY d.name, t.name LIMIT ?""", (limit,))
+        return [dict(row) for row in cur.fetchall()]
 
-        page = 0
-        per_page = 8
 
-        while True:
-            clear()
-            self.render_menubar()
-            self.render_title(f"{title} ({len(results)} Treffer)")
+# ─────────────────────────────────────────────────────────────
+# SCREENS
+# ─────────────────────────────────────────────────────────────
 
-            start = page * per_page
-            end = min(start + per_page, len(results))
+class ScriptDetailScreen(ModalScreen):
+    """Modal für Script-Details"""
 
-            for i, row in enumerate(results[start:end], start=start+1):
-                db = row['database_name'] or ''
-                tbl = row['table_name'] or '(global)'
-                elem = row['element_name'] or '-'
-                typ = row['code_type']
-                lines = row['line_count']
+    BINDINGS = [
+        Binding("escape", "dismiss", "Schließen"),
+        Binding("q", "dismiss", "Schließen"),
+    ]
 
-                print(f"   {C.WHITE}{i:2}{C.RESET}. {C.CYAN}{tbl}{C.RESET} › {elem}")
-                print(f"       {C.DIM}{db} | {typ} | {lines} Zeilen{C.RESET}")
+    CSS = """
+    ScriptDetailScreen {
+        align: center middle;
+    }
 
-            print(f"\n   {C.CYAN}{'─' * 40}{C.RESET}")
-            total_pages = (len(results) + per_page - 1) // per_page
-            print(f"   Seite {C.WHITE}{page+1}/{total_pages}{C.RESET}   {C.WHITE}N{C.RESET}=Weiter  {C.WHITE}P{C.RESET}=Zurück  {C.WHITE}Nr{C.RESET}=Details  {C.WHITE}Q{C.RESET}=Ende")
+    ScriptDetailScreen > Container {
+        width: 90%;
+        height: 90%;
+        border: thick $primary;
+        background: $surface;
+        padding: 1;
+    }
 
-            self.render_statusbar(f"{len(results)} Treffer")
+    #script-header {
+        height: 4;
+        padding: 0 1;
+    }
 
-            choice = self.input_field("").upper()
+    #script-code {
+        border: solid $primary-lighten-2;
+    }
+    """
 
-            if choice in ['Q', '', 'ESC']:
-                break
-            elif choice == 'N' and page < total_pages - 1:
-                page += 1
-            elif choice == 'P' and page > 0:
-                page -= 1
-            elif choice.isdigit():
-                idx = int(choice) - 1
-                if 0 <= idx < len(results):
-                    self.show_script_detail(results[idx])
+    def __init__(self, script: dict):
+        super().__init__()
+        self.script = script
 
-    def show_script_detail(self, script):
-        """Zeigt Script-Details"""
-        clear()
-        self.render_menubar()
+    def compose(self) -> ComposeResult:
+        code = (self.script.get('code') or '').replace('\\n', '\n').replace('\\t', '\t')
 
-        code = (script['code'] or '').replace('\\n', '\n').replace('\\t', '\t')
+        with Container():
+            yield Static(
+                f"[bold]{self.script.get('table_name', '')}[/] › {self.script.get('element_name', '')}\n"
+                f"[dim]{self.script.get('database_name', '')} | {self.script.get('code_type', '')} | "
+                f"{self.script.get('line_count', 0)} Zeilen[/]",
+                id="script-header"
+            )
+            yield TextArea(code, read_only=True, id="script-code", show_line_numbers=True)
 
-        self.render_title(f"{script['table_name']} › {script['element_name']}")
 
-        print(f"   {C.DIM}Datenbank:{C.RESET} {script['database_name']}")
-        print(f"   {C.DIM}Typ:{C.RESET}       {script['code_type']}")
-        print(f"   {C.DIM}Zeilen:{C.RESET}    {script['line_count']}\n")
-        print(f"   {C.CYAN}{'─' * 60}{C.RESET}")
+class ExtractScreen(ModalScreen):
+    """Modal für Extraktion"""
 
-        for i, line in enumerate(code.split('\n')[:25], 1):
-            print(f"   {C.DIM}{i:3}{C.RESET} {line[:72]}")
+    BINDINGS = [
+        Binding("escape", "dismiss", "Schließen"),
+    ]
 
-        if len(code.split('\n')) > 25:
-            print(f"   {C.DIM}... +{len(code.split(chr(10)))-25} weitere Zeilen{C.RESET}")
+    CSS = """
+    ExtractScreen {
+        align: center middle;
+    }
 
-        print(f"   {C.CYAN}{'─' * 60}{C.RESET}")
-        self.render_statusbar()
-        self.wait_key()
+    ExtractScreen > Container {
+        width: 60;
+        height: auto;
+        max-height: 80%;
+        border: thick $primary;
+        background: $surface;
+        padding: 1 2;
+    }
 
-    # ─────────────────────────────────────────────────────────────
-    # F2 - SCRIPTS
-    # ─────────────────────────────────────────────────────────────
+    #extract-title {
+        text-align: center;
+        text-style: bold;
+        padding: 1;
+    }
 
-    def show_scripts(self):
-        """Scripts nach Typ"""
-        if not self.cur:
-            return
+    #extract-log {
+        height: auto;
+        max-height: 15;
+        border: solid $primary-lighten-2;
+        padding: 1;
+        margin-top: 1;
+    }
 
-        clear()
-        self.render_menubar()
-        self.render_title("SCRIPTS NACH TYP")
+    .env-button {
+        margin: 0 1 1 1;
+    }
+    """
 
-        self.cur.execute("""SELECT code_type, COUNT(*) as cnt
-                           FROM scripts GROUP BY code_type ORDER BY cnt DESC""")
-        types = list(self.cur.fetchall())
+    def __init__(self, environments: dict, db_path: Path, on_complete: callable):
+        super().__init__()
+        self.environments = environments
+        self.db_path = db_path
+        self.on_complete = on_complete
+        self.log_text = ""
 
-        for i, row in enumerate(types, 1):
-            bar = '█' * min(row['cnt'] // 20, 25)
-            print(f"   {C.WHITE}{i:2}{C.RESET}. {row['code_type']:<20} {C.GREEN}{row['cnt']:>5}{C.RESET}  {C.DIM}{bar}{C.RESET}")
+    def compose(self) -> ComposeResult:
+        with Container():
+            yield Static("Daten aus Ninox abrufen", id="extract-title")
 
-        print(f"\n   {C.DIM}Nummer eingeben für Details, {C.WHITE}Q{C.RESET}{C.DIM}=Zurück{C.RESET}")
-        self.render_statusbar()
+            for name in self.environments.keys():
+                env = self.environments[name]
+                yield Button(
+                    f"{name} - {env.get('teamName', '')}",
+                    id=f"env-{name}",
+                    classes="env-button"
+                )
 
-        choice = self.input_field("").upper()
-        if choice.isdigit():
-            idx = int(choice) - 1
-            if 0 <= idx < len(types):
-                self.cur.execute("""SELECT id, database_name, table_name, element_name,
-                                    code_type, code, line_count FROM scripts
-                                    WHERE code_type = ? LIMIT 50""", (types[idx]['code_type'],))
-                self.show_results(list(self.cur.fetchall()), types[idx]['code_type'])
+            yield Button("Alle Teams", id="env-all", variant="primary", classes="env-button")
+            yield Static("", id="extract-log")
 
-    # ─────────────────────────────────────────────────────────────
-    # F3 - DATENBANKEN
-    # ─────────────────────────────────────────────────────────────
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        button_id = event.button.id
 
-    def show_databases(self):
-        """Zeigt Datenbanken"""
-        if not self.cur:
-            return
+        if button_id == "env-all":
+            self.run_extraction(list(self.environments.keys()))
+        elif button_id.startswith("env-"):
+            env_name = button_id[4:]
+            self.run_extraction([env_name])
 
-        clear()
-        self.render_menubar()
-        self.render_title("DATENBANKEN")
-
-        self.cur.execute("SELECT id, name, table_count, code_count FROM databases ORDER BY name")
-
-        for row in self.cur.fetchall():
-            print(f"   {C.CYAN}■{C.RESET} {C.BOLD}{row['name']}{C.RESET}")
-            print(f"     {C.DIM}Tabellen: {row['table_count']}  Scripts: {row['code_count']}{C.RESET}\n")
-
-        self.render_statusbar()
-        self.wait_key()
-
-    # ─────────────────────────────────────────────────────────────
-    # F4 - TABELLEN
-    # ─────────────────────────────────────────────────────────────
-
-    def show_tables(self):
-        """Zeigt Tabellen"""
-        if not self.cur:
-            return
-
-        clear()
-        self.render_menubar()
-        self.render_title("TABELLEN")
-
-        self.cur.execute("""SELECT t.name, t.caption, t.field_count, d.name as db_name
-                           FROM tables t JOIN databases d ON t.database_id = d.id
-                           ORDER BY d.name, t.name LIMIT 50""")
-
-        current_db = None
-        for row in self.cur.fetchall():
-            if current_db != row['db_name']:
-                current_db = row['db_name']
-                print(f"\n   {C.CYAN}{C.BOLD}{current_db}{C.RESET}")
-            caption = f" ({row['caption']})" if row['caption'] and row['caption'] != row['name'] else ""
-            print(f"     {row['name']}{C.DIM}{caption} [{row['field_count']} Felder]{C.RESET}")
-
-        self.render_statusbar()
-        self.wait_key()
-
-    # ─────────────────────────────────────────────────────────────
-    # F5 - DATEN ABRUFEN
-    # ─────────────────────────────────────────────────────────────
-
-    def extract_dialog(self):
-        """Dialog für Datenextraktion"""
-        if not self.environments:
-            self.status_msg = "Keine Config - C drücken"
-            return
-
-        clear()
-        self.render_menubar()
-        self.render_title("DATEN AUS NINOX ABRUFEN")
-
-        envs = list(self.environments.keys())
-        for i, name in enumerate(envs, 1):
-            env = self.environments[name]
-            print(f"   {C.WHITE}{i}{C.RESET}. {C.BOLD}{name}{C.RESET} - {env.get('teamName', '')}")
-
-        print(f"   {C.WHITE}A{C.RESET}. Alle Teams\n")
-
-        self.render_statusbar()
-        choice = self.input_field("Team auswählen").upper()
-
-        if choice == 'A':
-            self.run_extraction(envs)
-        elif choice.isdigit():
-            idx = int(choice) - 1
-            if 0 <= idx < len(envs):
-                self.run_extraction([envs[idx]])
+    def _log(self, text: str):
+        """Fügt Text zum Log hinzu und aktualisiert das Widget"""
+        self.log_text += text
+        self.query_one("#extract-log", Static).update(self.log_text)
 
     def run_extraction(self, env_names: list):
-        """Führt Extraktion aus"""
-        if self.conn:
-            self.conn.close()
-            self.conn = None
-            self.cur = None
-            time.sleep(0.2)
-
-        clear()
-        self.render_menubar()
-        self.render_title("EXTRAKTION")
+        self.log_text = "[bold]Extraktion gestartet...[/]\n"
+        self._log("")
 
         for env_name in env_names:
-            print(f"   {C.CYAN}►{C.RESET} Extrahiere {C.BOLD}{env_name}{C.RESET}...")
+            self._log(f"\n► Extrahiere [bold]{env_name}[/]...")
 
             cmd = [sys.executable, str(EXTRACTOR), 'extract',
                    '--config', str(CONFIG_FILE), '--env', env_name,
@@ -487,97 +296,338 @@ class NinoxViewer:
             try:
                 result = subprocess.run(cmd, capture_output=True, text=True, cwd=str(SCRIPT_DIR))
                 if result.returncode == 0:
-                    print(f"   {C.GREEN}✓{C.RESET} Erfolgreich")
-                    for line in result.stdout.split('\n'):
-                        if 'databases:' in line or 'scripts:' in line:
-                            print(f"     {C.DIM}{line.strip()}{C.RESET}")
+                    self._log(" [green]✓[/]")
                 else:
-                    print(f"   {C.RED}✗{C.RESET} Fehler")
-                    for line in (result.stderr or result.stdout).strip().split('\n')[-5:]:
-                        print(f"     {C.RED}{line}{C.RESET}")
+                    self._log(f" [red]✗[/]\n{result.stderr[:200]}")
             except Exception as e:
-                print(f"   {C.RED}✗{C.RESET} {e}")
+                self._log(f" [red]✗ {e}[/]")
 
-        self._reconnect()
-        self.render_statusbar("Extraktion abgeschlossen")
-        self.wait_key()
+        self._log("\n\n[dim]ESC zum Schließen[/]")
+        self.on_complete()
+
+
+# ─────────────────────────────────────────────────────────────
+# HAUPTANWENDUNG
+# ─────────────────────────────────────────────────────────────
+
+class NinoxViewer(App):
+    """Ninox Database Viewer - Textual App"""
+
+    CSS = """
+    Screen {
+        background: $surface;
+    }
+
+    #main-container {
+        height: 100%;
+    }
+
+    #sidebar {
+        width: 25;
+        border-right: solid $primary;
+        padding: 1;
+    }
+
+    #sidebar-title {
+        text-align: center;
+        text-style: bold;
+        padding: 1;
+        color: $text;
+    }
+
+    #content {
+        padding: 1 2;
+    }
+
+    #stats-panel {
+        height: 5;
+        border: solid $primary-lighten-2;
+        padding: 0 1;
+        margin-bottom: 1;
+    }
+
+    #search-box {
+        height: 3;
+        margin-bottom: 1;
+    }
+
+    #search-input {
+        width: 100%;
+    }
+
+    #results-table {
+        height: 1fr;
+        border: solid $primary-lighten-2;
+    }
+
+    .nav-button {
+        width: 100%;
+        margin-bottom: 1;
+    }
+
+    #code-preview {
+        height: 10;
+        border: solid $accent;
+        margin-top: 1;
+        padding: 1;
+    }
+    """
+
+    BINDINGS = [
+        Binding("q", "quit", "Beenden"),
+        Binding("s", "focus_search", "Suche"),
+        Binding("r", "refresh", "Refresh"),
+        Binding("e", "extract", "Extrahieren"),
+        Binding("d", "show_databases", "Datenbanken"),
+        Binding("t", "show_tables", "Tabellen"),
+        Binding("c", "show_types", "Code-Typen"),
+        Binding("escape", "clear_selection", "Abbrechen"),
+    ]
+
+    def __init__(self, db_path: Path):
+        super().__init__()
+        self.db_path = db_path
+        self.db = Database(db_path)
+        self.environments = load_config()
+        self.current_results = []
+
+    def compose(self) -> ComposeResult:
+        yield Header(show_clock=True)
+
+        with Horizontal(id="main-container"):
+            with Vertical(id="sidebar"):
+                yield Static("NINOX VIEWER", id="sidebar-title")
+                yield Button("🔍 Suche", id="btn-search", classes="nav-button")
+                yield Button("📝 Scripts", id="btn-scripts", classes="nav-button")
+                yield Button("🗄️ Datenbanken", id="btn-databases", classes="nav-button")
+                yield Button("📋 Tabellen", id="btn-tables", classes="nav-button")
+                yield Button("⬇️ Extrahieren", id="btn-extract", classes="nav-button", variant="primary")
+
+            with Vertical(id="content"):
+                yield Static(self._get_stats_text(), id="stats-panel")
+
+                with Horizontal(id="search-box"):
+                    yield Input(placeholder="Suche... (AND/OR unterstützt)", id="search-input")
+
+                yield DataTable(id="results-table", cursor_type="row")
+                yield Static("", id="code-preview")
+
+        yield Footer()
+
+    def on_mount(self) -> None:
+        table = self.query_one("#results-table", DataTable)
+        table.add_columns("Nr", "Tabelle", "Element", "Typ", "Zeilen")
+        self._show_script_types()
+
+    def _get_stats_text(self) -> str:
+        stats = self.db.get_stats()
+        return (
+            f"[bold]Statistik:[/] {stats['databases']} Datenbanken │ "
+            f"{stats['tables']} Tabellen │ {stats['scripts']} Scripts │ "
+            f"{stats['fields']} Felder"
+        )
+
+    def _update_stats(self) -> None:
+        self.query_one("#stats-panel", Static).update(self._get_stats_text())
+
+    def _clear_table(self) -> None:
+        table = self.query_one("#results-table", DataTable)
+        table.clear()
+
+    def _show_results(self, results: list, title: str = "Ergebnisse") -> None:
+        self.current_results = results
+        table = self.query_one("#results-table", DataTable)
+        table.clear()
+
+        for i, row in enumerate(results, 1):
+            table.add_row(
+                str(i),
+                row.get('table_name') or '(global)',
+                row.get('element_name') or '-',
+                row.get('code_type', ''),
+                str(row.get('line_count', 0)),
+                key=str(i-1)
+            )
+
+        self.query_one("#code-preview", Static).update(f"[dim]{len(results)} Ergebnisse[/]")
+
+    def _show_script_types(self) -> None:
+        types = self.db.get_script_types()
+        self.current_results = [{'code_type': t['code_type'], 'cnt': t['cnt']} for t in types]
+
+        table = self.query_one("#results-table", DataTable)
+        table.clear()
+
+        for i, t in enumerate(types, 1):
+            bar = '█' * min(t['cnt'] // 10, 20)
+            table.add_row(
+                str(i),
+                t['code_type'],
+                str(t['cnt']),
+                bar,
+                "",
+                key=f"type-{i-1}"
+            )
+
+        self.query_one("#code-preview", Static).update(
+            "[dim]Wähle einen Code-Typ um Scripts anzuzeigen[/]"
+        )
+
+    def _show_databases_list(self) -> None:
+        dbs = self.db.get_databases()
+        self.current_results = dbs
+
+        table = self.query_one("#results-table", DataTable)
+        table.clear()
+
+        for i, db in enumerate(dbs, 1):
+            table.add_row(
+                str(i),
+                db['name'],
+                f"{db['table_count']} Tab.",
+                f"{db['code_count']} Scripts",
+                "",
+                key=f"db-{i-1}"
+            )
+
+        self.query_one("#code-preview", Static).update(f"[dim]{len(dbs)} Datenbanken[/]")
+
+    def _show_tables_list(self) -> None:
+        tables = self.db.get_tables()
+        self.current_results = tables
+
+        table = self.query_one("#results-table", DataTable)
+        table.clear()
+
+        for i, t in enumerate(tables, 1):
+            caption = t.get('caption') or ''
+            if caption == t['name']:
+                caption = ''
+            table.add_row(
+                str(i),
+                t['db_name'],
+                t['name'],
+                caption[:20],
+                f"{t['field_count']} F.",
+                key=f"tbl-{i-1}"
+            )
+
+        self.query_one("#code-preview", Static).update(f"[dim]{len(tables)} Tabellen[/]")
 
     # ─────────────────────────────────────────────────────────────
-    # F6 - KONFIGURATION
+    # EVENT HANDLER
     # ─────────────────────────────────────────────────────────────
 
-    def config_dialog(self):
-        """Konfigurationsdialog"""
-        clear()
-        self.render_menubar()
-        self.render_title("KONFIGURATION")
+    def on_button_pressed(self, event: Button.Pressed) -> None:
+        button_id = event.button.id
 
-        if self.environments:
-            print(f"   {C.DIM}Vorhandene Environments:{C.RESET}\n")
-            for name, env in self.environments.items():
-                print(f"   {C.CYAN}■{C.RESET} {C.BOLD}{name}{C.RESET}: {env.get('domain', '')}")
-            print()
+        if button_id == "btn-search":
+            self.query_one("#search-input", Input).focus()
+        elif button_id == "btn-scripts":
+            self._show_script_types()
+        elif button_id == "btn-databases":
+            self._show_databases_list()
+        elif button_id == "btn-tables":
+            self._show_tables_list()
+        elif button_id == "btn-extract":
+            self.action_extract()
 
-        print(f"   {C.WHITE}N{C.RESET} = Neues Environment anlegen")
-        print(f"   {C.WHITE}Q{C.RESET} = Zurück\n")
+    def on_input_submitted(self, event: Input.Submitted) -> None:
+        if event.input.id == "search-input":
+            query = event.value.strip()
+            if query:
+                results = self.db.search_scripts(query)
+                self._show_results(results, f"Suche: {query}")
 
-        self.render_statusbar()
-        choice = self.input_field("").upper()
-
-        if choice == 'N':
-            self.create_environment()
-
-    def create_environment(self):
-        """Erstellt neues Environment"""
-        clear()
-        self.render_menubar()
-        self.render_title("NEUES ENVIRONMENT")
-
-        print(f"   {C.DIM}Ninox Zugangsdaten eingeben:{C.RESET}\n")
-
-        name = self.input_field("Name (z.B. production)")
-        if not name:
+    def on_data_table_row_selected(self, event: DataTable.RowSelected) -> None:
+        if not self.current_results:
             return
 
-        domain = self.input_field("Domain", "https://app.ninoxdb.de")
-        if not domain.startswith('http'):
-            domain = 'https://' + domain
+        key = event.row_key.value
 
-        workspace_id = self.input_field("Workspace-ID")
-        if not workspace_id:
+        # Code-Typ ausgewählt?
+        if key and key.startswith("type-"):
+            idx = int(key.split("-")[1])
+            if idx < len(self.current_results):
+                code_type = self.current_results[idx].get('code_type')
+                if code_type:
+                    results = self.db.get_scripts_by_type(code_type)
+                    self._show_results(results, f"Typ: {code_type}")
             return
 
-        team_name = self.input_field("Team-Name", name.capitalize())
+        # Script ausgewählt - zeige Details
+        try:
+            idx = int(key) if key else event.cursor_row
+            if 0 <= idx < len(self.current_results):
+                script = self.current_results[idx]
+                if 'code' in script:
+                    self.push_screen(ScriptDetailScreen(script))
+        except (ValueError, TypeError):
+            pass
 
-        api_key = self.input_field("API-Key")
-        if not api_key:
+    def on_data_table_row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        """Zeigt Code-Vorschau beim Navigieren"""
+        if not self.current_results:
             return
 
-        self.environments[name] = {
-            'domain': domain,
-            'workspaceId': workspace_id,
-            'teamName': team_name,
-            'apiKey': api_key
-        }
+        try:
+            key = event.row_key.value if event.row_key else None
+            if key and key.startswith(("type-", "db-", "tbl-")):
+                return
 
-        if save_config(self.environments):
-            print(f"\n   {C.GREEN}✓ Gespeichert!{C.RESET}")
-        else:
-            print(f"\n   {C.RED}✗ Fehler beim Speichern{C.RESET}")
+            idx = int(key) if key else event.cursor_row
+            if 0 <= idx < len(self.current_results):
+                script = self.current_results[idx]
+                code = (script.get('code') or '').replace('\\n', '\n').replace('\\t', '\t')
+                lines = [l for l in code.split('\n') if l.strip()][:3]
+                preview = '\n'.join(lines)
+                if len(code.split('\n')) > 3:
+                    preview += f"\n[dim]... +{len(code.split(chr(10)))-3} Zeilen[/]"
+                self.query_one("#code-preview", Static).update(preview)
+        except (ValueError, TypeError):
+            pass
 
-        self.wait_key()
+    # ─────────────────────────────────────────────────────────────
+    # ACTIONS
+    # ─────────────────────────────────────────────────────────────
+
+    def action_focus_search(self) -> None:
+        self.query_one("#search-input", Input).focus()
+
+    def action_refresh(self) -> None:
+        self.db.reconnect()
+        self._update_stats()
+        self._show_script_types()
+        self.notify("Daten aktualisiert", timeout=2)
+
+    def action_extract(self) -> None:
+        if not self.environments:
+            self.notify("Keine Environments in config.yaml", severity="error")
+            return
+
+        def on_complete():
+            self.db.reconnect()
+            self._update_stats()
+
+        self.push_screen(ExtractScreen(self.environments, self.db_path, on_complete))
+
+    def action_show_databases(self) -> None:
+        self._show_databases_list()
+
+    def action_show_tables(self) -> None:
+        self._show_tables_list()
+
+    def action_show_types(self) -> None:
+        self._show_script_types()
+
+    def action_clear_selection(self) -> None:
+        self._show_script_types()
 
 
 def main():
     db_path = Path(sys.argv[1]) if len(sys.argv) > 1 else DEFAULT_DB
-    viewer = NinoxViewer(db_path)
-    try:
-        viewer.run()
-    except KeyboardInterrupt:
-        pass
-    finally:
-        viewer.close()
-        print(f"\n{C.DIM}Auf Wiedersehen!{C.RESET}\n")
+    app = NinoxViewer(db_path)
+    app.run()
 
 
 if __name__ == "__main__":

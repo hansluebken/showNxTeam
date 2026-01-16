@@ -30,3 +30,6 @@ dokumentation.md
 # OS
 .DS_Store
 Thumbs.db
+ninox-go/ninox-tui
+ninox-go/ninox-scripts
+ninox-go/cmd/ninox-scripts/ninox-scripts
