@@ -18,6 +18,9 @@ ENV/
 # SQLite Datenbanken
 *.db
 
+# Generierte Dokumentation (enthält Geschäftsdaten)
+dokumentation.md
+
 # IDE
 .idea/
 .vscode/
