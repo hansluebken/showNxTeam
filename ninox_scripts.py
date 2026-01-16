@@ -14,13 +14,12 @@ from pathlib import Path
 from textual import events
 from textual.app import App, ComposeResult
 from textual.binding import Binding
-from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Header, Footer, Static, Input, Label
+from textual.containers import Container, ScrollableContainer
+from textual.widgets import Static, Input, DataTable, OptionList
+from textual.widgets.option_list import Option
 from textual.reactive import reactive
 from rich.syntax import Syntax
 from rich.text import Text
-from rich.panel import Panel
-from rich.table import Table
 
 # =============================================================================
 # Datentypen
@@ -121,107 +120,29 @@ def filter_scripts(scripts: list[Script], filter_text: str) -> list[Script]:
     return result
 
 
-# =============================================================================
-# Widgets
-# =============================================================================
+def format_script_line(script: Script, col_widths: dict) -> Text:
+    """Formatiert eine Script-Zeile als Rich Text."""
+    w = col_widths
 
-class ScriptRow(Static):
-    """Eine Script-Zeile mit Header und Code-Preview."""
+    # Texte auf Spaltenbreite kürzen und padden
+    db = script.database_name[:w['database']].ljust(w['database'])
+    table = script.table_name[:w['table']].ljust(w['table'])
+    elem = (script.element_name or "(Tabelle)")[:w['element']].ljust(w['element'])
+    typ = script.code_type[:w['type']].ljust(w['type'])
+    cat = script.code_category[:w['category']].ljust(w['category'])
 
-    def __init__(self, script: Script, selected: bool = False, col_widths: dict = None):
-        super().__init__()
-        self.script = script
-        self.selected = selected
-        self.col_widths = col_widths or {}
+    line = Text()
+    line.append(db, style="cyan")
+    line.append(" │ ", style="dim")
+    line.append(table, style="green")
+    line.append(" │ ", style="dim")
+    line.append(elem, style="yellow")
+    line.append(" │ ", style="dim")
+    line.append(typ, style="magenta")
+    line.append(" │ ", style="dim")
+    line.append(cat, style="blue")
 
-    def compose(self) -> ComposeResult:
-        yield Static(id="content")
-
-    def on_mount(self):
-        self.update_content()
-
-    def update_content(self):
-        s = self.script
-        w = self.col_widths
-
-        elem = s.element_name or "(Tabelle)"
-
-        # Header-Zeile
-        prefix = "▶ " if self.selected else "  "
-        header = f"{prefix}{s.database_name:<{w.get('database', 20)}} │ {s.table_name:<{w.get('table', 20)}} │ {elem:<{w.get('element', 20)}} │ {s.code_type:<{w.get('type', 10)}} │ {s.code_category}"
-
-        # Code-Preview mit Syntax-Highlighting
-        code_lines = s.code.split("\n")
-        max_lines = min(12, len(code_lines))
-        preview_code = "\n".join(code_lines[:max_lines])
-        if len(code_lines) > max_lines:
-            preview_code += f"\n... (+{len(code_lines) - max_lines} Zeilen)"
-
-        syntax = Syntax(preview_code, "javascript", theme="monokai", line_numbers=True)
-
-        border_style = "bright_cyan" if self.selected else "dim"
-        header_style = "bold bright_white on dark_blue" if self.selected else "white"
-
-        content = self.query_one("#content", Static)
-        content.update(
-            Text(header, style=header_style)
-        )
-
-        self.border_title = f"{s.code_type}"
-        self.styles.border = ("round", border_style)
-
-
-class ScriptList(ScrollableContainer):
-    """Scrollbare Liste aller Scripts."""
-
-    def __init__(self, scripts: list[Script], col_widths: dict):
-        super().__init__()
-        self.scripts = scripts
-        self.col_widths = col_widths
-        self.selected_index = 0
-
-    def compose(self) -> ComposeResult:
-        for i, script in enumerate(self.scripts):
-            yield ScriptRow(script, selected=(i == 0), col_widths=self.col_widths)
-
-    def update_selection(self, new_index: int):
-        if not self.scripts:
-            return
-
-        old_index = self.selected_index
-        self.selected_index = max(0, min(new_index, len(self.scripts) - 1))
-
-        rows = list(self.query(ScriptRow))
-        if old_index < len(rows):
-            rows[old_index].selected = False
-            rows[old_index].styles.border = ("round", "dim")
-        if self.selected_index < len(rows):
-            rows[self.selected_index].selected = True
-            rows[self.selected_index].styles.border = ("round", "bright_cyan")
-            rows[self.selected_index].scroll_visible()
-
-
-class CodeViewer(ScrollableContainer):
-    """Vollständige Code-Ansicht mit Syntax-Highlighting."""
-
-    def __init__(self, script: Script):
-        super().__init__()
-        self.script = script
-
-    def compose(self) -> ComposeResult:
-        s = self.script
-
-        # Header
-        header = f"""═══════════════════════════════════════════════════════════
-  Datenbank:  {s.database_name}
-  Tabelle:    {s.table_name}
-  Element:    {s.element_name or '(Tabelle)'}
-  Typ:        {s.code_type} ({s.code_category})
-  Zeilen:     {s.line_count}
-═══════════════════════════════════════════════════════════"""
-
-        yield Static(Text(header, style="bold bright_cyan"), id="code-header")
-        yield Static(Syntax(s.code, "javascript", theme="monokai", line_numbers=True), id="code-content")
+    return line
 
 
 # =============================================================================
@@ -274,15 +195,13 @@ class NinoxScriptsApp(App):
         height: 1fr;
     }
 
-    ScriptRow {
-        height: auto;
-        margin: 0 1 1 1;
-        padding: 0 1;
-        border: round $primary-darken-3;
+    OptionList {
+        height: 1fr;
+        scrollbar-gutter: stable;
     }
 
-    ScriptRow #content {
-        height: auto;
+    OptionList > .option-list--option-highlighted {
+        background: $accent;
     }
 
     #code-viewer {
@@ -290,6 +209,7 @@ class NinoxScriptsApp(App):
         margin: 1;
         padding: 1;
         border: round $primary;
+        overflow-y: auto;
     }
 
     #status-bar {
@@ -307,12 +227,6 @@ class NinoxScriptsApp(App):
         Binding("enter", "select", "Anzeigen"),
         Binding("f", "filter", "Filter"),
         Binding("c", "clear", "Löschen"),
-        Binding("up", "up", "Hoch", show=False),
-        Binding("down", "down", "Runter", show=False),
-        Binding("k", "up", "Hoch", show=False),
-        Binding("j", "down", "Runter", show=False),
-        Binding("pageup", "page_up", "Seite hoch", show=False),
-        Binding("pagedown", "page_down", "Seite runter", show=False),
     ]
 
     filter_text = reactive("")
@@ -323,7 +237,6 @@ class NinoxScriptsApp(App):
         super().__init__()
         self.all_scripts = scripts
         self.filtered_scripts = scripts
-        self.selected_index = 0
         self.col_widths = self.calculate_widths(scripts)
         self.theme_name = theme
 
@@ -340,10 +253,10 @@ class NinoxScriptsApp(App):
             w["category"] = max(w["category"], len(s.code_category))
 
         # Maximalwerte
-        w["database"] = min(w["database"], 30)
-        w["table"] = min(w["table"], 30)
-        w["element"] = min(w["element"], 30)
-        w["type"] = min(w["type"], 15)
+        w["database"] = min(w["database"], 25)
+        w["table"] = min(w["table"], 25)
+        w["element"] = min(w["element"], 25)
+        w["type"] = min(w["type"], 12)
         w["category"] = min(w["category"], 12)
 
         return w
@@ -357,12 +270,12 @@ class NinoxScriptsApp(App):
         )
         yield Static("", id="filter-info")
 
-        # Header
+        # Header (gleiche Formatierung wie Zeilen)
         w = self.col_widths
-        header = f"  {'Datenbank':<{w['database']}} │ {'Tabelle':<{w['table']}} │ {'Element':<{w['element']}} │ {'Typ':<{w['type']}} │ Kategorie"
+        header = f"{'Datenbank'[:w['database']].ljust(w['database'])} │ {'Tabelle'[:w['table']].ljust(w['table'])} │ {'Element'[:w['element']].ljust(w['element'])} │ {'Typ'[:w['type']].ljust(w['type'])} │ {'Kategorie'[:w['category']].ljust(w['category'])}"
         yield Static(header, id="header-row")
 
-        yield ScrollableContainer(id="script-list")
+        yield OptionList(id="script-list")
         yield Static(" ↑↓ Nav │ Enter Code │ f Filter │ c Clear │ q Quit", id="status-bar")
 
     def on_mount(self):
@@ -371,12 +284,16 @@ class NinoxScriptsApp(App):
 
     def refresh_list(self):
         """Aktualisiert die Script-Liste."""
-        container = self.query_one("#script-list", ScrollableContainer)
-        container.remove_children()
+        option_list = self.query_one("#script-list", OptionList)
+        option_list.clear_options()
 
+        # Optionen erstellen (effizient, da OptionList virtualisiert)
+        options = []
         for i, script in enumerate(self.filtered_scripts):
-            row = ScriptRow(script, selected=(i == self.selected_index), col_widths=self.col_widths)
-            container.mount(row)
+            line = format_script_line(script, self.col_widths)
+            options.append(Option(line, id=str(i)))
+
+        option_list.add_options(options)
 
         # Titel aktualisieren
         total = len(self.all_scripts)
@@ -393,43 +310,6 @@ class NinoxScriptsApp(App):
         else:
             self.query_one("#filter-info", Static).update("")
 
-    def update_selection(self, new_index: int):
-        """Aktualisiert die Auswahl."""
-        if not self.filtered_scripts:
-            return
-
-        old_index = self.selected_index
-        self.selected_index = max(0, min(new_index, len(self.filtered_scripts) - 1))
-
-        rows = list(self.query("#script-list ScriptRow"))
-        if old_index < len(rows):
-            rows[old_index].selected = False
-            rows[old_index].styles.border = ("round", "dim")
-        if self.selected_index < len(rows):
-            rows[self.selected_index].selected = True
-            rows[self.selected_index].styles.border = ("round", "bright_cyan")
-            rows[self.selected_index].scroll_visible()
-
-        # Status aktualisieren
-        pos = f" {self.selected_index + 1}/{len(self.filtered_scripts)}"
-        self.query_one("#status-bar", Static).update(f"{pos} │ ↑↓ Nav │ Enter Code │ f Filter │ c Clear │ q Quit")
-
-    def action_up(self):
-        if not self.showing_code and not self.filtering:
-            self.update_selection(self.selected_index - 1)
-
-    def action_down(self):
-        if not self.showing_code and not self.filtering:
-            self.update_selection(self.selected_index + 1)
-
-    def action_page_up(self):
-        if not self.showing_code and not self.filtering:
-            self.update_selection(self.selected_index - 5)
-
-    def action_page_down(self):
-        if not self.showing_code and not self.filtering:
-            self.update_selection(self.selected_index + 5)
-
     def action_filter(self):
         if not self.showing_code:
             self.filtering = True
@@ -440,7 +320,6 @@ class NinoxScriptsApp(App):
         if not self.showing_code and not self.filtering:
             self.filter_text = ""
             self.filtered_scripts = self.all_scripts
-            self.selected_index = 0
             self.col_widths = self.calculate_widths(self.all_scripts)
             self.refresh_list()
 
@@ -456,32 +335,65 @@ class NinoxScriptsApp(App):
             else:
                 self.filtered_scripts = self.all_scripts
 
-            self.selected_index = 0
             self.col_widths = self.calculate_widths(self.filtered_scripts)
             self.refresh_list()
+            self.query_one("#script-list", OptionList).focus()
         elif not self.showing_code and self.filtered_scripts:
             # Code anzeigen
-            self.showing_code = True
-            script = self.filtered_scripts[self.selected_index]
+            option_list = self.query_one("#script-list", OptionList)
+            highlighted = option_list.highlighted
+            if highlighted is None:
+                return
 
-            self.query_one("#script-list").display = False
-            self.query_one("#header-row").display = False
-            self.query_one("#filter-info").display = False
+            idx = int(option_list.get_option_at_index(highlighted).id)
+            script = self.filtered_scripts[idx]
+            self.show_code(script)
 
-            viewer = CodeViewer(script)
-            viewer.id = "code-viewer"
-            self.mount(viewer)
+    def on_option_list_option_selected(self, event: OptionList.OptionSelected):
+        """Wird aufgerufen wenn eine Option mit Enter ausgewählt wird."""
+        if not self.showing_code and self.filtered_scripts:
+            idx = int(event.option.id)
+            script = self.filtered_scripts[idx]
+            self.show_code(script)
 
-            self.query_one("#title-bar", Static).update(f" Code: {script.element_name or script.table_name}")
-            self.query_one("#status-bar", Static).update(" ↑↓ Scroll │ Esc/Enter Zurück │ q Beenden")
+    def show_code(self, script: Script):
+        """Zeigt den Code eines Scripts an."""
+        self.showing_code = True
+
+        self.query_one("#script-list").display = False
+        self.query_one("#header-row").display = False
+        self.query_one("#filter-info").display = False
+
+        # Header für Code-Ansicht
+        header = f"""═══════════════════════════════════════════════════════════
+  Datenbank:  {script.database_name}
+  Tabelle:    {script.table_name}
+  Element:    {script.element_name or '(Tabelle)'}
+  Typ:        {script.code_type} ({script.code_category})
+  Zeilen:     {script.line_count}
+═══════════════════════════════════════════════════════════
+
+"""
+        syntax = Syntax(script.code, "javascript", theme="monokai", line_numbers=True)
+
+        viewer = ScrollableContainer(
+            Static(Text(header, style="bold bright_cyan")),
+            Static(syntax),
+            id="code-viewer"
+        )
+        self.mount(viewer)
+
+        self.query_one("#title-bar", Static).update(f" Code: {script.element_name or script.table_name}")
+        self.query_one("#status-bar", Static).update(" ↑↓ Scroll │ Esc/Enter Zurück │ q Beenden")
 
     def action_back(self):
         if self.filtering:
             self.filtering = False
             self.query_one("#filter-container").display = False
+            self.query_one("#script-list", OptionList).focus()
         elif self.showing_code:
             self.showing_code = False
-            viewer = self.query_one("#code-viewer", CodeViewer)
+            viewer = self.query_one("#code-viewer")
             viewer.remove()
 
             self.query_one("#script-list").display = True
@@ -496,8 +408,10 @@ class NinoxScriptsApp(App):
                 title = f" Ninox Scripts ({total})"
             self.query_one("#title-bar", Static).update(title)
             self.query_one("#status-bar", Static).update(" ↑↓ Nav │ Enter Code │ f Filter │ c Clear │ q Quit")
+            self.query_one("#script-list", OptionList).focus()
 
     def on_input_submitted(self, event: Input.Submitted):
+        event.stop()
         if self.filtering:
             self.action_select()
 
@@ -520,7 +434,7 @@ def print_usage():
     print("  --help, -h   Diese Hilfe")
     print("")
     print("Tasten:")
-    print("  ↑/k ↓/j      Navigation")
+    print("  ↑/↓          Navigation")
     print("  Enter        Vollständigen Code anzeigen")
     print("  f            Filter eingeben")
     print("  c            Filter löschen")
