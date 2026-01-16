@@ -1072,29 +1072,16 @@ class NinoxSchemaExtractor:
         """
         import os
 
-        # Integrity-Check VOR dem Öffnen: Prüfen ob existierende DB beschädigt ist
+        # Bei bestehender DB: Datei löschen und neu erstellen
+        # (FTS5 Content-Sync verursacht Korruption bei DELETE)
+        if self.conn:
+            self.conn.close()
+            self.conn = None
         if os.path.exists(self.db_path):
-            try:
-                test_conn = sqlite3.connect(self.db_path)
-                test_cursor = test_conn.cursor()
-                test_cursor.execute("PRAGMA integrity_check")
-                result = test_cursor.fetchone()[0]
-                test_conn.close()
-                if result != 'ok':
-                    raise sqlite3.DatabaseError(f"Integrity check failed: {result}")
-            except (sqlite3.DatabaseError, sqlite3.OperationalError) as e:
-                logger.warning(f"Beschädigte Datenbank erkannt: {e}")
-                logger.warning("Datenbank wird gelöscht und neu erstellt...")
-                try:
-                    if self.conn:
-                        self.conn.close()
-                        self.conn = None
-                except:
-                    pass
-                os.remove(self.db_path)
+            os.remove(self.db_path)
+            logger.info("Bestehende Datenbank gelöscht für Neu-Extraktion")
 
-        if not self.conn:
-            self.init_database()
+        self.init_database()
 
         stats = {
             'databases': 0,
@@ -1103,17 +1090,6 @@ class NinoxSchemaExtractor:
             'relationships': 0,
             'scripts': 0,
         }
-
-        # Alte Daten löschen
-        cursor = self.conn.cursor()
-        cursor.execute("DELETE FROM scripts_fts")
-        cursor.execute("DELETE FROM script_dependencies")
-        cursor.execute("DELETE FROM scripts")
-        cursor.execute("DELETE FROM relationships")
-        cursor.execute("DELETE FROM fields")
-        cursor.execute("DELETE FROM tables")
-        cursor.execute("DELETE FROM databases")
-        self.conn.commit()
         
         # Alle Datenbanken laden
         databases = self.api.get_databases()
